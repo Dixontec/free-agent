@@ -1,0 +1,98 @@
+{
+  "$schema": "Documented in references/providers/index.md and references/setup.md",
+  "$comment_default": "Provider used when --provider/--all is not given on the CLI. Skill auto-picks duckduckgo (zero-config) if you omit this. Native (no-auth) providers are preferred so the skill works out of the box.",
+  "default": "duckduckgo",
+
+  "$comment_fallback": "OPTIONAL ordered chain of provider names. When the default provider errors OR returns zero results, the skill falls through this list sequentially, stopping at the first that produces results. Providers without configured credentials are silently skipped, which makes this future-proof for slots you haven't filled yet. Recommended order: native (zero-config) -> paid raw search -> LLM-backed.",
+  "fallback": ["mwmbl", "brave", "tavily", "anthropic", "openai"],
+
+  "$comment_max_results": "Default cap for results per provider. Each provider clamps to its own server-side max (see references/providers/<name>.md).",
+  "maxResults": 10,
+
+  "$comment_baseurl": "Every provider supports an optional `baseUrl` override. Use it for self-hosted proxies, regional mirrors (e.g. EU endpoints), corporate gateways, on-premise deployments, or local mocks. The override fully replaces the default endpoint - no concatenation. See references/base-urls.md.",
+
+  "$comment_providers": "Configure ONLY the providers you have credentials for. Unconfigured providers are silently skipped (no error, no fake results). The two zero-config providers (duckduckgo, mwmbl) require no entry here - they always work.",
+  "providers": {
+    "exa": {
+      "$comment": "API key required as of 2026. Anonymous calls return 402 Payment Required.",
+      "apiKey": "exa-XXXXXXXXXXXXXXXXXXXXXXXX",
+      "$baseUrl_default": "https://api.exa.ai/search",
+      "baseUrl": null
+    },
+    "tavily": {
+      "apiKey": "tvly-XXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+      "$baseUrl_default": "https://api.tavily.com/search",
+      "baseUrl": null
+    },
+    "brave": {
+      "apiKey": "BSAxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "$baseUrl_default": "https://api.search.brave.com/res/v1/web/search",
+      "baseUrl": null
+    },
+    "serper": {
+      "apiKey": "0123456789abcdef0123456789abcdef01234567",
+      "$baseUrl_default": "https://google.serper.dev/search",
+      "baseUrl": null
+    },
+    "google-cse": {
+      "apiKey": "AIzaXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+      "searchEngineId": "017576662512468239146:omuauf_lfve",
+      "$baseUrl_default": "https://customsearch.googleapis.com/customsearch/v1",
+      "baseUrl": null
+    },
+    "z-ai": {
+      "apiKey": "Bearer-token-from-z.ai",
+      "$comment_searchEngine": "OPTIONAL. Defaults to 'search-prime'. Override if z.ai exposes other engines.",
+      "searchEngine": null,
+      "$baseUrl_default": "https://api.z.ai/api/paas/v4/web_search",
+      "baseUrl": null
+    },
+    "perplexity": {
+      "apiKey": "pplx-XXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+      "$comment_model": "OPTIONAL. Perplexity's /search endpoint does NOT require a model. Leave model unset (null) to use the cheap pure-search endpoint. If you set a sonar-* model, the skill switches to /chat/completions which generates an answer with citations.",
+      "model": null,
+      "$baseUrl_default": "https://api.perplexity.ai/search (pure) | https://api.perplexity.ai/chat/completions (sonar mode)",
+      "baseUrl": null
+    },
+    "xai": {
+      "apiKey": "xai-XXXXXXXXXXXXXXXXXXXXXXXX",
+      "$comment_model": "OPTIONAL. xAI's web_search tool requires a model. Skill default is grok-4.3 (xAI's general recommendation). Set explicitly only if you want a different Grok variant.",
+      "model": null,
+      "$baseUrl_default": "https://api.x.ai/v1/responses",
+      "baseUrl": null
+    },
+    "openai": {
+      "apiKey": "sk-proj-XXXXXXXXXXXXXXXXXXXX",
+      "$comment_model": "OPTIONAL. OpenAI's web_search tool requires a model. Skill default is gpt-5.4-mini (cheap, fast, supports web_search). Set 'gpt-5.5' or 'gpt-5.5-pro' for higher synthesis quality at higher cost.",
+      "model": null,
+      "$comment_searchContextSize": "OPTIONAL. low|medium|high - controls token budget for search context per call.",
+      "searchContextSize": "medium",
+      "$comment_mode": "OPTIONAL. live = real-time web access (default), cached = OpenAI snapshot only.",
+      "mode": "live",
+      "$comment_maxToolCalls": "OPTIONAL integer. Caps total web_search invocations per request. Useful for cost control with agentic loops.",
+      "maxToolCalls": null,
+      "$baseUrl_default": "https://api.openai.com/v1/responses",
+      "baseUrl": null
+    },
+    "anthropic": {
+      "apiKey": "sk-ant-XXXXXXXXXXXXXXXXXXXX",
+      "$comment_model": "OPTIONAL. Anthropic's web_search tool requires a Claude model. Skill default is claude-sonnet-4-6 (current GA Sonnet supporting web_search_20260209 with dynamic filtering).",
+      "model": null,
+      "$comment_toolVersion": "OPTIONAL. Defaults to web_search_20260209 (latest, with dynamic filtering). Pin to web_search_20250305 if you need ZDR eligibility (older basic tool).",
+      "toolVersion": null,
+      "$comment_maxUses": "OPTIONAL. Caps how many search calls Claude can make per request. Defaults to 5. Lower for predictable cost.",
+      "maxUses": 5,
+      "$comment_maxTokens": "OPTIONAL. max_tokens in the Messages API request. Default 2048.",
+      "maxTokens": null,
+      "$baseUrl_default": "https://api.anthropic.com/v1/messages",
+      "baseUrl": null
+    }
+  },
+
+  "$comment_filters": "Optional global domain filters applied to every search call. CLI --include/--exclude overrides these per-call.",
+  "allowedDomains": [],
+  "blockedDomains": [],
+
+  "$comment_temp_dir": "Where raw + normalized result JSON files are written. Override via $WEBSEARCH_TMP_DIR or --tmp-dir. Defaults to /tmp/web-search on macOS/Linux and tempfile.gettempdir()/web-search on Windows.",
+  "tmpDir": null
+}

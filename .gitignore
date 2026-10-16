@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+.env
+
+# Node / eval
+node_modules/
+*.log
+
+# OS / editores
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Config local com chaves (nunca commitar)
+config.json
+*-local.json
+.backup/
+exports/

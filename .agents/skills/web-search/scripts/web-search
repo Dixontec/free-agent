@@ -1,0 +1,1808 @@
+#!/usr/bin/env python3
+"""web-search: LLM-neutral web search across multiple providers.
+
+Single-file Python 3 CLI that wraps 10 search providers (Exa, Tavily, Brave,
+Serper, Google CSE, Z.ai, Perplexity, xAI, OpenAI, Anthropic) behind one
+uniform interface. Saves raw + normalized results to a temp directory and
+prints a path the caller can pipe through `rg`, `jq`, `grep`, or any other
+tool.
+
+Stdlib only (urllib, json, argparse, threading, ssl, datetime, pathlib,
+concurrent.futures). No external dependencies. Works on macOS, Linux, WSL,
+Git Bash for Windows, and any environment with Python 3.8+.
+
+For full documentation see SKILL.md, and the references/ directory for
+provider-specific details, pipeline recipes, and curl equivalents.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import platform
+import re
+import ssl
+import sys
+import tempfile
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Callable
+
+# --------------------------------------------------------------------------- #
+# Constants
+# --------------------------------------------------------------------------- #
+
+VERSION = "0.1.0"
+
+PROVIDERS: tuple[str, ...] = (
+    "duckduckgo",  # Free, no API key required. Instant Answer API.
+    "mwmbl",       # Free, no API key required. Independent open-source index.
+    "exa",
+    "tavily",
+    "brave",
+    "serper",
+    "google-cse",
+    "z-ai",
+    "perplexity",
+    "xai",
+    "openai",
+    "anthropic",
+)
+
+# Default endpoints. Each can be overridden per-provider via `baseUrl` in
+# config.json (see config/config.example.json).
+DEFAULT_ENDPOINTS: dict[str, str] = {
+    "duckduckgo": "https://api.duckduckgo.com/",
+    "mwmbl": "https://api.mwmbl.org/api/v1/search/",
+    "exa": "https://api.exa.ai/search",
+    "tavily": "https://api.tavily.com/search",
+    "brave": "https://api.search.brave.com/res/v1/web/search",
+    "serper": "https://google.serper.dev/search",
+    "google-cse": "https://customsearch.googleapis.com/customsearch/v1",
+    "z-ai": "https://api.z.ai/api/paas/v4/web_search",
+    "perplexity": "https://api.perplexity.ai/search",
+    "perplexity-sonar": "https://api.perplexity.ai/chat/completions",
+    "xai": "https://api.x.ai/v1/responses",
+    "openai": "https://api.openai.com/v1/responses",
+    "anthropic": "https://api.anthropic.com/v1/messages",
+}
+
+# Sensible model defaults for providers that require a model. Overridable per
+# config or per CLI flag. Picked to optimize cost-per-search:
+#  - openai: gpt-5.4-mini — cheap, supports web_search tool, fast
+#  - anthropic: claude-sonnet-4-6 — current GA Sonnet supporting web_search_20260209
+#  - xai: grok-4.3 — xAI's general-recommendation model for tool calling
+#  - perplexity: sonar-pro — only used in sonar mode (model explicitly set)
+DEFAULT_MODELS: dict[str, str] = {
+    "xai": "grok-4.3",
+    "openai": "gpt-5.4-mini",
+    "anthropic": "claude-sonnet-4-6",
+    "perplexity": "sonar-pro",
+}
+
+ANTHROPIC_TOOL_VERSION = "web_search_20260209"
+ANTHROPIC_API_VERSION = "2023-06-01"
+
+# Per-provider server-side max_results cap. We clamp client-side so callers do
+# not get surprised by silent truncation downstream.
+MAX_RESULTS_CAPS: dict[str, int] = {
+    "duckduckgo": 30,  # Instant Answer + RelatedTopics — server returns variable count
+    "mwmbl": 20,       # Small index — usually returns <20 anyway
+    "exa": 20,
+    "tavily": 20,
+    "brave": 20,
+    "serper": 20,
+    "google-cse": 10,
+    "z-ai": 50,
+    "perplexity": 20,
+    "xai": 20,  # the model decides; cap is informational
+    "openai": 20,
+    "anthropic": 20,
+}
+
+# Standard env var fallbacks. Each tuple is checked in order; first non-empty
+# wins. Config file values take priority over env vars.
+ENV_KEY_MAP: dict[str, tuple[str, ...]] = {
+    # duckduckgo and mwmbl have no env keys — they require no auth.
+    "exa": ("EXA_API_KEY",),
+    "tavily": ("TAVILY_API_KEY",),
+    "brave": ("BRAVE_API_KEY", "BRAVE_SEARCH_API_KEY"),
+    "serper": ("SERPER_API_KEY",),
+    "google-cse": ("GOOGLE_CSE_API_KEY", "GOOGLE_API_KEY"),
+    "z-ai": ("Z_AI_API_KEY", "ZAI_API_KEY", "ZHIPU_API_KEY"),
+    "perplexity": ("PERPLEXITY_API_KEY", "PPLX_API_KEY"),
+    "xai": ("XAI_API_KEY",),
+    "openai": ("OPENAI_API_KEY",),
+    "anthropic": ("ANTHROPIC_API_KEY",),
+}
+
+def _platform_config_paths() -> tuple[str, ...]:
+    """Return the standard config-file search order for the host OS.
+
+    Layered so users on each OS can drop config in the natural place:
+      * macOS / Linux  : XDG `~/.config/web-search/config.json`, then `~/.web-search.json`
+      * Windows        : `%APPDATA%\\web-search\\config.json`, then `~/AppData/Roaming/web-search/config.json`
+                         (the second form is what `Path.home()` resolves to when APPDATA is unset)
+      * All platforms  : `./web-search.json` and `./.web-search.json` for project-local overrides
+    """
+    paths: list[str] = []
+    home = Path.home()
+    if platform.system() == "Windows":
+        appdata = os.environ.get("APPDATA")
+        if appdata:
+            paths.append(str(Path(appdata) / "web-search" / "config.json"))
+        paths.append(str(home / "AppData" / "Roaming" / "web-search" / "config.json"))
+    paths.append(str(home / ".config" / "web-search" / "config.json"))
+    paths.append(str(home / ".web-search.json"))
+    paths.append("./web-search.json")
+    paths.append("./.web-search.json")
+    # Drop duplicates while preserving order.
+    seen: set[str] = set()
+    deduped: list[str] = []
+    for path in paths:
+        if path not in seen:
+            seen.add(path)
+            deduped.append(path)
+    return tuple(deduped)
+
+
+CONFIG_PATHS: tuple[str, ...] = _platform_config_paths()
+
+
+def _platform_tmp_root() -> Path:
+    """Return the host-appropriate root directory for run output.
+
+    Resolution order:
+      1. `$WEBSEARCH_TMP_DIR` if explicitly set (any OS)
+      2. macOS / Linux: `/tmp/web-search`
+      3. Windows / others: `<tempfile.gettempdir()>/web-search`
+
+    `tempfile.gettempdir()` honors `$TMPDIR`, `$TEMP`, `$TMP`, and falls back
+    to platform-appropriate defaults (`C:\\Users\\<user>\\AppData\\Local\\Temp`
+    on Windows, `/tmp` on POSIX, `/var/folders/.../T` on macOS sandboxes).
+    """
+    explicit = os.environ.get("WEBSEARCH_TMP_DIR")
+    if explicit:
+        return Path(explicit).expanduser()
+    if platform.system() in ("Darwin", "Linux"):
+        return Path("/tmp/web-search")
+    return Path(tempfile.gettempdir()) / "web-search"
+
+
+DEFAULT_TMP_DIR = _platform_tmp_root()
+
+# HTTP timeouts (connect + read combined into a single value because urllib
+# does not split them). Generous defaults — model-backed providers can take
+# 30 s for a single search call.
+HTTP_TIMEOUT_SECONDS = float(os.environ.get("WEBSEARCH_HTTP_TIMEOUT", "60"))
+
+
+# --------------------------------------------------------------------------- #
+# Errors
+# --------------------------------------------------------------------------- #
+
+
+class WebSearchError(Exception):
+    """Base error for the skill."""
+
+
+class ConfigError(WebSearchError):
+    """Configuration is missing, invalid, or contradictory."""
+
+
+class ProviderError(WebSearchError):
+    """A specific provider call failed. Carries the provider name and HTTP status if any."""
+
+    def __init__(self, provider: str, message: str, *, status: int | None = None) -> None:
+        super().__init__(f"[{provider}] {message}")
+        self.provider = provider
+        self.status = status
+
+
+# --------------------------------------------------------------------------- #
+# Config loading
+# --------------------------------------------------------------------------- #
+
+
+def _read_json_file(path: str | Path) -> dict[str, Any] | None:
+    p = Path(path).expanduser()
+    if not p.is_file():
+        return None
+    try:
+        text = p.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise ConfigError(f"Cannot read config file {p}: {exc}") from exc
+    try:
+        loaded = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise ConfigError(f"Invalid JSON in {p}: {exc}") from exc
+    if not isinstance(loaded, dict):
+        raise ConfigError(f"Config file {p} must contain a JSON object at the top level.")
+    return _strip_doc_keys(loaded)
+
+
+def _strip_doc_keys(obj: Any) -> Any:
+    """Drop keys that start with `$` (treated as documentation/comments).
+
+    This lets us ship a heavily commented config example while keeping the
+    runtime dict clean.
+    """
+    if isinstance(obj, dict):
+        return {k: _strip_doc_keys(v) for k, v in obj.items() if not k.startswith("$")}
+    if isinstance(obj, list):
+        return [_strip_doc_keys(v) for v in obj]
+    return obj
+
+
+def load_config(explicit_path: str | None) -> dict[str, Any]:
+    """Locate and merge config from CLI -> $WEBSEARCH_CONFIG -> standard paths.
+
+    Returns a dict shaped like config/config.example.json with `_source`
+    annotated for the chosen file (or `None` if no file was found).
+
+    Env-var API keys are merged as a fallback ONLY for providers not already
+    configured via the file.
+    """
+    candidates: list[str] = []
+    if explicit_path:
+        candidates.append(explicit_path)
+    env_path = os.environ.get("WEBSEARCH_CONFIG")
+    if env_path:
+        candidates.append(env_path)
+    candidates.extend(CONFIG_PATHS)
+
+    config: dict[str, Any] = {}
+    source: str | None = None
+    for path in candidates:
+        loaded = _read_json_file(path)
+        if loaded is not None:
+            config = loaded
+            source = str(Path(path).expanduser())
+            break
+
+    config.setdefault("providers", {})
+    if not isinstance(config["providers"], dict):
+        raise ConfigError("`providers` must be a JSON object.")
+
+    # Env-var fallback merge: only applies if the provider is missing from the
+    # config file. This means a config file with `"providers": {}` will still
+    # pick up env vars, but a config file that explicitly maps a provider to
+    # `null` or `false` is respected.
+    for provider, env_names in ENV_KEY_MAP.items():
+        if provider in config["providers"]:
+            existing = config["providers"][provider]
+            # If config has an entry but no apiKey, allow env to fill the gap.
+            if isinstance(existing, dict) and not _truthy_str(existing.get("apiKey")):
+                for env_name in env_names:
+                    value = os.environ.get(env_name)
+                    if value:
+                        existing["apiKey"] = value
+                        break
+            continue
+        for env_name in env_names:
+            value = os.environ.get(env_name)
+            if value:
+                config["providers"][provider] = {"apiKey": value}
+                break
+
+    # Google CSE special case: needs both apiKey and searchEngineId.
+    if "google-cse" in config["providers"]:
+        gcse = config["providers"]["google-cse"]
+        if isinstance(gcse, dict) and not _truthy_str(gcse.get("searchEngineId")):
+            engine_id = os.environ.get("GOOGLE_CSE_ID") or os.environ.get(
+                "GOOGLE_SEARCH_ENGINE_ID"
+            )
+            if engine_id:
+                gcse["searchEngineId"] = engine_id
+
+    config["_source"] = source
+    config.setdefault("default", _pick_default_provider(config["providers"]))
+    config.setdefault("maxResults", 10)
+    return config
+
+
+def _pick_default_provider(providers: dict[str, Any]) -> str | None:
+    """Pick a sensible default if the config file did not specify one.
+
+    Prefers native zero-config providers (DuckDuckGo, MWMBL) so the skill
+    works out of the box without any API key. Falls back to paid raw-search
+    providers (Brave, Serper, Tavily, Exa, Google CSE) and then to LLM-backed
+    providers (Perplexity) if no native provider is available.
+    """
+    preference = (
+        "duckduckgo",
+        "mwmbl",
+        "brave",
+        "tavily",
+        "serper",
+        "exa",
+        "google-cse",
+        "perplexity",
+    )
+    for name in preference:
+        if name in _NO_AUTH_PROVIDERS:
+            return name
+        if name in providers and _has_credentials(name, providers[name]):
+            return name
+    for name, cfg in providers.items():
+        if _has_credentials(name, cfg):
+            return name
+    return None
+
+
+def _truthy_str(value: Any) -> bool:
+    return isinstance(value, str) and value.strip() not in ("", "null", "None")
+
+
+_NO_AUTH_PROVIDERS: frozenset[str] = frozenset({"duckduckgo", "mwmbl"})
+
+
+def _has_credentials(provider: str, cfg: Any) -> bool:
+    if provider in _NO_AUTH_PROVIDERS:
+        # Always available — no key required. Treated as "configured" so they
+        # show up in --list-providers and --all.
+        return True
+    if not isinstance(cfg, dict):
+        return False
+    if provider == "google-cse":
+        return _truthy_str(cfg.get("apiKey")) and _truthy_str(cfg.get("searchEngineId"))
+    # Exa formerly accepted anonymous calls but as of 2026 returns 402 Payment
+    # Required without a key. Treat it like every other paid provider.
+    return _truthy_str(cfg.get("apiKey"))
+
+
+# --------------------------------------------------------------------------- #
+# HTTP client
+# --------------------------------------------------------------------------- #
+
+
+_SSL_CONTEXT = ssl.create_default_context()
+
+
+def http_request(
+    method: str,
+    url: str,
+    *,
+    headers: dict[str, str] | None = None,
+    body: dict[str, Any] | None = None,
+    timeout: float = HTTP_TIMEOUT_SECONDS,
+) -> tuple[int, dict[str, Any]]:
+    """Send a JSON request and parse the JSON response.
+
+    Returns (status_code, parsed_body). Raises ProviderError on transport or
+    parse failures so that the caller can attribute the failure to a specific
+    provider when running multiple in parallel.
+    """
+    request_headers = {"User-Agent": f"web-search-skill/{VERSION}", "Accept": "application/json"}
+    if headers:
+        request_headers.update(headers)
+
+    data: bytes | None = None
+    if body is not None:
+        data = json.dumps(body).encode("utf-8")
+        request_headers.setdefault("Content-Type", "application/json")
+
+    request = urllib.request.Request(url, data=data, headers=request_headers, method=method.upper())
+
+    try:
+        with urllib.request.urlopen(request, timeout=timeout, context=_SSL_CONTEXT) as response:
+            payload_bytes = response.read()
+            status = response.getcode()
+    except urllib.error.HTTPError as exc:
+        # Body still useful: many providers return JSON error details.
+        body_bytes = exc.read() if hasattr(exc, "read") else b""
+        try:
+            parsed = json.loads(body_bytes.decode("utf-8")) if body_bytes else {}
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            parsed = {"_raw": body_bytes.decode("utf-8", errors="replace")}
+        return exc.code, parsed
+    except urllib.error.URLError as exc:
+        raise WebSearchError(f"Network error contacting {url}: {exc}") from exc
+    except TimeoutError as exc:
+        raise WebSearchError(f"Timeout contacting {url} after {timeout}s") from exc
+
+    if not payload_bytes:
+        return status, {}
+    try:
+        parsed = json.loads(payload_bytes.decode("utf-8"))
+    except json.JSONDecodeError as exc:
+        raise WebSearchError(f"Non-JSON response from {url}: {exc}") from exc
+    if not isinstance(parsed, dict):
+        # Wrap arrays so downstream code can rely on dict access uniformly.
+        parsed = {"_array": parsed}
+    return status, parsed
+
+
+# --------------------------------------------------------------------------- #
+# Result schema and normalization helpers
+# --------------------------------------------------------------------------- #
+
+
+def _make_result(
+    title: str | None,
+    url: str | None,
+    *,
+    snippet: str | None = None,
+    score: float | None = None,
+    source: str | None = None,
+    published_at: str | None = None,
+) -> dict[str, Any] | None:
+    """Build a canonical result item, dropping items missing required fields."""
+    if not title or not url:
+        return None
+    item: dict[str, Any] = {"title": title.strip(), "url": url.strip()}
+    if snippet:
+        item["snippet"] = snippet.strip()
+    if score is not None:
+        item["score"] = float(score)
+    if source:
+        item["source"] = source.strip()
+    if published_at:
+        item["publishedAt"] = published_at.strip()
+    return item
+
+
+def _resolve_endpoint(provider: str, cfg: dict[str, Any], *, key: str = "baseUrl") -> str:
+    explicit = cfg.get(key)
+    if isinstance(explicit, str) and explicit.strip():
+        return explicit.strip()
+    return DEFAULT_ENDPOINTS[provider]
+
+
+def _domain_query_filter(query: str, allowed: list[str] | None, blocked: list[str] | None) -> str:
+    """Append `site:` / `-site:` operators for providers that don't accept
+    structured domain filter fields."""
+    parts = [query]
+    for d in allowed or []:
+        parts.append(f"site:{d}")
+    for d in blocked or []:
+        parts.append(f"-site:{d}")
+    return " ".join(parts)
+
+
+def _clamp(value: int, lo: int, hi: int) -> int:
+    return max(lo, min(hi, int(value)))
+
+
+# --------------------------------------------------------------------------- #
+# Per-provider request builders + response normalizers
+# --------------------------------------------------------------------------- #
+#
+# Each provider has two functions: `build_<name>` returns the full HTTP call
+# spec as `(method, url, headers, body)`. `normalize_<name>` converts the
+# raw JSON response into a list of canonical result dicts.
+# --------------------------------------------------------------------------- #
+
+
+def build_duckduckgo(cfg, query, max_results, allowed, blocked):
+    """DuckDuckGo Instant Answer API — free, no auth, official public API.
+
+    Returns abstract + related topics, not full ranked web results. Best for
+    factual lookups ("what is X", definitions, calculations).
+    """
+    base = _resolve_endpoint("duckduckgo", cfg)
+    parsed = urllib.parse.urlsplit(base)
+    qs = urllib.parse.parse_qsl(parsed.query)
+    qs.append(("q", _domain_query_filter(query, allowed, blocked)))
+    qs.append(("format", "json"))
+    qs.append(("no_html", "1"))
+    qs.append(("skip_disambig", "1"))
+    qs.append(("no_redirect", "1"))
+    url = urllib.parse.urlunsplit(parsed._replace(query=urllib.parse.urlencode(qs)))
+    return ("GET", url, {"Accept": "application/json"}, None)
+
+
+def normalize_duckduckgo(payload):
+    out: list[dict[str, Any]] = []
+    seen_urls: set[str] = set()
+
+    def _push(title: str | None, url: str | None, snippet: str | None) -> None:
+        if not title or not url or url in seen_urls:
+            return
+        result = _make_result(title, url, snippet=snippet)
+        if result:
+            out.append(result)
+            seen_urls.add(url)
+
+    abstract_url = payload.get("AbstractURL")
+    if isinstance(abstract_url, str) and abstract_url:
+        _push(
+            payload.get("Heading") or abstract_url,
+            abstract_url,
+            payload.get("AbstractText") or payload.get("Abstract"),
+        )
+
+    definition_url = payload.get("DefinitionURL")
+    if isinstance(definition_url, str) and definition_url:
+        _push(
+            payload.get("DefinitionSource") or definition_url,
+            definition_url,
+            payload.get("Definition"),
+        )
+
+    answer = payload.get("Answer")
+    if isinstance(answer, str) and answer.strip() and not out:
+        out.append(
+            {
+                "title": payload.get("AnswerType") or "instant_answer",
+                "url": payload.get("AbstractURL") or "https://duckduckgo.com/?q=" + urllib.parse.quote(payload.get("Heading") or ""),
+                "snippet": answer,
+            }
+        )
+
+    def _walk_topics(items: Any) -> None:
+        if not isinstance(items, list):
+            return
+        for raw in items:
+            if not isinstance(raw, dict):
+                continue
+            if "Topics" in raw and isinstance(raw["Topics"], list):
+                _walk_topics(raw["Topics"])
+                continue
+            url = raw.get("FirstURL")
+            text = raw.get("Text")
+            if isinstance(url, str) and isinstance(text, str):
+                title = text.split(" - ", 1)[0] if " - " in text else text
+                _push(title, url, text)
+
+    _walk_topics(payload.get("RelatedTopics"))
+    _walk_topics(payload.get("Results"))
+
+    return out
+
+
+def build_mwmbl(cfg, query, max_results, allowed, blocked):
+    """MWMBL — open-source, independent crawler index. Free, no auth.
+
+    Small index (~few million pages) — best as a free fallback for actual
+    ranked web links when DuckDuckGo Instant Answer has no `AbstractURL`.
+    """
+    base = _resolve_endpoint("mwmbl", cfg)
+    parsed = urllib.parse.urlsplit(base)
+    qs = urllib.parse.parse_qsl(parsed.query)
+    qs.append(("s", _domain_query_filter(query, allowed, blocked)))
+    url = urllib.parse.urlunsplit(parsed._replace(query=urllib.parse.urlencode(qs)))
+    return ("GET", url, {"Accept": "application/json"}, None)
+
+
+def normalize_mwmbl(payload):
+    """MWMBL returns a top-level array (handled by http_request: wrapped as
+    `{"_array": [...]}`). Each item has `url`, `title` (segments), `extract`
+    (segments), `source`."""
+    items = payload.get("_array") if "_array" in payload else None
+    if items is None:
+        # Some MWMBL deployments wrap results in {"results": [...]}.
+        items = payload.get("results") or []
+    out: list[dict[str, Any]] = []
+    if not isinstance(items, list):
+        return out
+    for raw in items:
+        if not isinstance(raw, dict):
+            continue
+        url = raw.get("url")
+        title = _join_segments(raw.get("title"))
+        extract = _join_segments(raw.get("extract"))
+        source = raw.get("source") if isinstance(raw.get("source"), str) else None
+        result = _make_result(title, url, snippet=extract or None, source=source)
+        if result:
+            out.append(result)
+    return out
+
+
+def _join_segments(raw: Any) -> str:
+    """MWMBL `title` and `extract` are arrays of {value, is_bold} segments."""
+    if isinstance(raw, str):
+        return raw
+    if not isinstance(raw, list):
+        return ""
+    parts: list[str] = []
+    for seg in raw:
+        if isinstance(seg, dict) and isinstance(seg.get("value"), str):
+            parts.append(seg["value"])
+        elif isinstance(seg, str):
+            parts.append(seg)
+    return "".join(parts).strip()
+
+
+def build_exa(
+    cfg: dict[str, Any],
+    query: str,
+    max_results: int,
+    allowed: list[str] | None,
+    blocked: list[str] | None,
+) -> tuple[str, str, dict[str, str], dict[str, Any] | None]:
+    headers: dict[str, str] = {
+        "Content-Type": "application/json",
+        "x-api-key": cfg.get("apiKey", ""),
+    }
+    body: dict[str, Any] = {"query": query, "numResults": _clamp(max_results, 1, MAX_RESULTS_CAPS["exa"])}
+    if allowed:
+        body["includeDomains"] = allowed
+    if blocked:
+        body["excludeDomains"] = blocked
+    return ("POST", _resolve_endpoint("exa", cfg), headers, body)
+
+
+def normalize_exa(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for raw in payload.get("results") or []:
+        if not isinstance(raw, dict):
+            continue
+        result = _make_result(
+            raw.get("title"),
+            raw.get("url"),
+            snippet=raw.get("text") or raw.get("snippet"),
+            score=raw.get("score") if isinstance(raw.get("score"), (int, float)) else None,
+            published_at=raw.get("publishedDate") if isinstance(raw.get("publishedDate"), str) else None,
+        )
+        if result:
+            out.append(result)
+    return out
+
+
+def build_tavily(cfg, query, max_results, allowed, blocked):
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {cfg.get('apiKey', '')}",
+    }
+    body: dict[str, Any] = {"query": query, "max_results": _clamp(max_results, 1, MAX_RESULTS_CAPS["tavily"])}
+    if allowed:
+        body["include_domains"] = allowed
+    if blocked:
+        body["exclude_domains"] = blocked
+    return ("POST", _resolve_endpoint("tavily", cfg), headers, body)
+
+
+def normalize_tavily(payload):
+    out: list[dict[str, Any]] = []
+    for raw in payload.get("results") or []:
+        if not isinstance(raw, dict):
+            continue
+        result = _make_result(
+            raw.get("title"),
+            raw.get("url"),
+            snippet=raw.get("content"),
+            score=raw.get("score") if isinstance(raw.get("score"), (int, float)) else None,
+            published_at=raw.get("published_date") if isinstance(raw.get("published_date"), str) else None,
+        )
+        if result:
+            out.append(result)
+    return out
+
+
+def build_brave(cfg, query, max_results, allowed, blocked):
+    base = _resolve_endpoint("brave", cfg)
+    parsed = urllib.parse.urlsplit(base)
+    qs = urllib.parse.parse_qsl(parsed.query)
+    qs.append(("q", _domain_query_filter(query, allowed, blocked)))
+    qs.append(("count", str(_clamp(max_results, 1, MAX_RESULTS_CAPS["brave"]))))
+    url = urllib.parse.urlunsplit(parsed._replace(query=urllib.parse.urlencode(qs)))
+    headers = {
+        "Accept": "application/json",
+        "X-Subscription-Token": cfg.get("apiKey", ""),
+    }
+    return ("GET", url, headers, None)
+
+
+def normalize_brave(payload):
+    out: list[dict[str, Any]] = []
+    web = payload.get("web") if isinstance(payload.get("web"), dict) else {}
+    for raw in web.get("results") or []:
+        if not isinstance(raw, dict):
+            continue
+        result = _make_result(
+            raw.get("title"),
+            raw.get("url"),
+            snippet=raw.get("description"),
+            published_at=raw.get("page_age") if isinstance(raw.get("page_age"), str) else None,
+        )
+        if result:
+            out.append(result)
+    return out
+
+
+def build_serper(cfg, query, max_results, allowed, blocked):
+    headers = {"Content-Type": "application/json", "X-API-KEY": cfg.get("apiKey", "")}
+    body = {
+        "q": _domain_query_filter(query, allowed, blocked),
+        "num": _clamp(max_results, 1, MAX_RESULTS_CAPS["serper"]),
+    }
+    return ("POST", _resolve_endpoint("serper", cfg), headers, body)
+
+
+def normalize_serper(payload):
+    out: list[dict[str, Any]] = []
+    for raw in payload.get("organic") or []:
+        if not isinstance(raw, dict):
+            continue
+        result = _make_result(
+            raw.get("title"),
+            raw.get("link"),
+            snippet=raw.get("snippet"),
+            published_at=raw.get("date") if isinstance(raw.get("date"), str) else None,
+        )
+        if result:
+            out.append(result)
+    return out
+
+
+def build_google_cse(cfg, query, max_results, allowed, blocked):
+    base = _resolve_endpoint("google-cse", cfg)
+    parsed = urllib.parse.urlsplit(base)
+    qs = urllib.parse.parse_qsl(parsed.query)
+    qs.append(("q", _domain_query_filter(query, allowed, blocked)))
+    qs.append(("key", cfg.get("apiKey", "")))
+    qs.append(("cx", cfg.get("searchEngineId", "")))
+    qs.append(("num", str(_clamp(max_results, 1, MAX_RESULTS_CAPS["google-cse"]))))
+    url = urllib.parse.urlunsplit(parsed._replace(query=urllib.parse.urlencode(qs)))
+    return ("GET", url, {"Accept": "application/json"}, None)
+
+
+def normalize_google_cse(payload):
+    out: list[dict[str, Any]] = []
+    for raw in payload.get("items") or []:
+        if not isinstance(raw, dict):
+            continue
+        result = _make_result(raw.get("title"), raw.get("link"), snippet=raw.get("snippet"))
+        if result:
+            out.append(result)
+    return out
+
+
+def build_z_ai(cfg, query, max_results, allowed, blocked):
+    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {cfg.get('apiKey', '')}"}
+    body: dict[str, Any] = {
+        "search_engine": cfg.get("searchEngine") or "search-prime",
+        "search_query": query,
+        "count": _clamp(max_results, 1, MAX_RESULTS_CAPS["z-ai"]),
+    }
+    if allowed and len(allowed) > 0:
+        # z-ai only supports a single domain filter.
+        body["search_domain_filter"] = allowed[0]
+    return ("POST", _resolve_endpoint("z-ai", cfg), headers, body)
+
+
+def normalize_z_ai(payload):
+    out: list[dict[str, Any]] = []
+    for raw in payload.get("search_result") or []:
+        if not isinstance(raw, dict):
+            continue
+        result = _make_result(
+            raw.get("title"),
+            raw.get("link"),
+            snippet=raw.get("content"),
+            source=raw.get("media") if isinstance(raw.get("media"), str) else None,
+            published_at=raw.get("publish_date") if isinstance(raw.get("publish_date"), str) else None,
+        )
+        if result:
+            out.append(result)
+    return out
+
+
+def build_perplexity(cfg, query, max_results, allowed, blocked):
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {cfg.get('apiKey', '')}",
+    }
+    model = cfg.get("model")
+
+    if _truthy_str(model):
+        # User explicitly requested chat-completions/sonar mode.
+        sonar_url = cfg.get("baseUrl") if _truthy_str(cfg.get("baseUrl")) else DEFAULT_ENDPOINTS[
+            "perplexity-sonar"
+        ]
+        body: dict[str, Any] = {
+            "model": model,
+            "messages": [{"role": "user", "content": query}],
+        }
+        domain_filter: list[str] | None = None
+        if allowed:
+            domain_filter = list(allowed)
+        elif blocked:
+            domain_filter = [f"-{d}" for d in blocked]
+        if domain_filter:
+            body["search_domain_filter"] = domain_filter
+        return ("POST", sonar_url, headers, body)
+
+    # Pure /search endpoint — no model required.
+    body = {"query": query, "max_results": _clamp(max_results, 1, MAX_RESULTS_CAPS["perplexity"])}
+    if allowed:
+        body["search_domain_filter"] = allowed
+    elif blocked:
+        body["search_domain_filter"] = [f"-{d}" for d in blocked]
+    if cfg.get("country"):
+        body["country"] = cfg["country"]
+    if cfg.get("recency"):
+        body["search_recency_filter"] = cfg["recency"]
+    return ("POST", _resolve_endpoint("perplexity", cfg), headers, body)
+
+
+def normalize_perplexity(payload):
+    out: list[dict[str, Any]] = []
+    # Pure /search shape: {"results": [...]}
+    if isinstance(payload.get("results"), list):
+        for raw in payload["results"]:
+            if not isinstance(raw, dict):
+                continue
+            published = raw.get("date") or raw.get("last_updated")
+            result = _make_result(
+                raw.get("title"),
+                raw.get("url"),
+                snippet=raw.get("snippet"),
+                published_at=published if isinstance(published, str) else None,
+            )
+            if result:
+                out.append(result)
+        if out:
+            return out
+
+    # Sonar / chat completions shape: search_results[] + citations[].
+    if isinstance(payload.get("search_results"), list):
+        for raw in payload["search_results"]:
+            if not isinstance(raw, dict):
+                continue
+            result = _make_result(
+                raw.get("title"),
+                raw.get("url"),
+                snippet=raw.get("snippet"),
+                published_at=raw.get("date") if isinstance(raw.get("date"), str) else None,
+                source=raw.get("source") if isinstance(raw.get("source"), str) else None,
+            )
+            if result:
+                out.append(result)
+        if out:
+            return out
+
+    # Fallback: bare `citations` list (URLs only).
+    if isinstance(payload.get("citations"), list):
+        for raw in payload["citations"]:
+            if isinstance(raw, str):
+                result = _make_result(raw, raw)
+                if result:
+                    out.append(result)
+    return out
+
+
+def build_xai(cfg, query, max_results, allowed, blocked):
+    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {cfg.get('apiKey', '')}"}
+    web_search_tool: dict[str, Any] = {"type": "web_search"}
+    if allowed:
+        web_search_tool["filters"] = {"allowed_domains": list(allowed[:5])}
+    elif blocked:
+        web_search_tool["filters"] = {"excluded_domains": list(blocked[:5])}
+    body = {
+        "model": cfg.get("model") or DEFAULT_MODELS["xai"],
+        "input": query,
+        "tools": [web_search_tool],
+        "tool_choice": "required",
+    }
+    return ("POST", _resolve_endpoint("xai", cfg), headers, body)
+
+
+def build_openai(cfg, query, max_results, allowed, blocked):
+    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {cfg.get('apiKey', '')}"}
+    web_search_tool: dict[str, Any] = {"type": "web_search"}
+    mode = (cfg.get("mode") or "live").lower()
+    web_search_tool["external_web_access"] = mode != "cached"
+    if cfg.get("searchContextSize"):
+        web_search_tool["search_context_size"] = cfg["searchContextSize"]
+    if allowed:
+        web_search_tool["filters"] = {"allowed_domains": list(allowed[:100])}
+    elif blocked:
+        web_search_tool["filters"] = {"blocked_domains": list(blocked[:100])}
+    if isinstance(cfg.get("userLocation"), dict):
+        web_search_tool["user_location"] = {"type": "approximate", **cfg["userLocation"]}
+    body = {
+        "model": cfg.get("model") or DEFAULT_MODELS["openai"],
+        "input": query,
+        "tools": [web_search_tool],
+        "tool_choice": "required",
+    }
+    if cfg.get("maxToolCalls"):
+        body["max_tool_calls"] = int(cfg["maxToolCalls"])
+    return ("POST", _resolve_endpoint("openai", cfg), headers, body)
+
+
+def normalize_responses_api(payload: dict[str, Any], *, fallback_provider: str | None = None) -> list[dict[str, Any]]:
+    """Normalize OpenAI-style Responses API output (used by xai + openai).
+
+    Walks `output[]` for two distinct sources of URLs:
+
+      * `message.content[].annotations[]` — direct OpenAI / xAI shape, gives
+        `title`, `url`, and `cited_text`.
+      * `web_search_call.action` — present in three forms in the wild:
+          - `action.type == "search"`     : has `queries[]`, no URL
+          - `action.type == "open_page"`  : has `url`
+          - `action.type == "find_in_page"`: has `url` and `pattern`
+          - `action.sources[]`            : xAI legacy shape with title+url
+
+    Some OpenAI-compatible proxies / gateways return empty annotations and
+    expose URLs only through `action.url` (open_page / find_in_page
+    actions). Direct OpenAI returns rich annotations. Both must work.
+
+    Final fallback: top-level `citations[]` (xAI legacy bare-URL list).
+    """
+    out: list[dict[str, Any]] = []
+    output = payload.get("output") if isinstance(payload.get("output"), list) else []
+
+    text = ""
+    annotations: list[Any] = []
+    pages_visited: list[tuple[str, str | None]] = []  # (url, optional title)
+    sources_from_call: list[Any] = []
+
+    for item in output:
+        if not isinstance(item, dict):
+            continue
+        item_type = item.get("type")
+        if item_type == "web_search_call":
+            action = item.get("action") if isinstance(item.get("action"), dict) else {}
+            for src in action.get("sources") or []:
+                if isinstance(src, dict):
+                    sources_from_call.append(src)
+            url = action.get("url") if isinstance(action.get("url"), str) else None
+            if url:
+                pages_visited.append((url, action.get("title") if isinstance(action.get("title"), str) else None))
+        elif item_type == "message":
+            for content in item.get("content") or []:
+                if not isinstance(content, dict):
+                    continue
+                if content.get("type") in ("output_text", "text") and isinstance(content.get("text"), str):
+                    text = content["text"]
+                if isinstance(content.get("annotations"), list):
+                    annotations.extend(content["annotations"])
+
+    snippet_default = text or None
+
+    # Prefer annotations because they include title + cited span.
+    for ann in annotations:
+        if not isinstance(ann, dict):
+            continue
+        if ann.get("type") in ("url_citation", "web_search_result_location"):
+            cited = ann.get("cited_text") if isinstance(ann.get("cited_text"), str) else None
+            result = _make_result(
+                ann.get("title") or ann.get("url"),
+                ann.get("url"),
+                snippet=cited or snippet_default,
+            )
+            if result:
+                out.append(result)
+
+    if out:
+        return out
+
+    # Proxy/gateway path: use the URLs the model actually opened during the
+    # search (open_page / find_in_page actions).
+    seen_urls: set[str] = set()
+    for url, title in pages_visited:
+        if url in seen_urls:
+            continue
+        seen_urls.add(url)
+        display_title = title or _title_from_url(url)
+        result = _make_result(display_title, url, snippet=snippet_default)
+        if result:
+            out.append(result)
+    if out:
+        return out
+
+    # xAI legacy: web_search_call.action.sources[]
+    for src in sources_from_call:
+        url = src.get("url")
+        if not isinstance(url, str) or url in seen_urls:
+            continue
+        seen_urls.add(url)
+        title = src.get("title") or url
+        result = _make_result(title, url, snippet=snippet_default)
+        if result:
+            out.append(result)
+    if out:
+        return out
+
+    # Fallback: top-level citations[] (xAI legacy bare-URL list).
+    citations = payload.get("citations") if isinstance(payload.get("citations"), list) else []
+    for raw in citations:
+        url = raw if isinstance(raw, str) else (raw.get("url") if isinstance(raw, dict) else None)
+        if not isinstance(url, str) or url in seen_urls:
+            continue
+        seen_urls.add(url)
+        title = (raw.get("title") if isinstance(raw, dict) else None) or url
+        result = _make_result(title, url, snippet=snippet_default)
+        if result:
+            out.append(result)
+    if out:
+        return out
+
+    # Last-resort fallback: extract URLs the model cited inside its synthesis
+    # text. Hits the case where the model used web_search internally but did
+    # not emit explicit `open_page` actions or `url_citation` annotations
+    # (observed with some proxy responses to conceptual queries). Prefer
+    # markdown links `[label](url)` for clean titles, then bare URLs.
+    if text:
+        # `[label](https://...)` — capture label and URL.
+        for label, url in re.findall(r"\[([^\]]+)\]\((https?://[^\s)]+)\)", text):
+            url = url.rstrip(".,;:")
+            if url in seen_urls:
+                continue
+            seen_urls.add(url)
+            result = _make_result(label.strip() or _title_from_url(url), url, snippet=snippet_default)
+            if result:
+                out.append(result)
+        # Bare URLs not already captured above.
+        for url in re.findall(r"https?://[^\s)>\]]+", text):
+            url = url.rstrip(".,;:)")
+            if url in seen_urls:
+                continue
+            seen_urls.add(url)
+            result = _make_result(_title_from_url(url), url, snippet=snippet_default)
+            if result:
+                out.append(result)
+    return out
+
+
+def _title_from_url(url: str) -> str:
+    try:
+        parsed = urllib.parse.urlsplit(url)
+        host = parsed.netloc or url
+        path = parsed.path.rstrip("/")
+        if path:
+            tail = path.rsplit("/", 1)[-1]
+            return f"{host} — {tail}" if tail else host
+        return host
+    except Exception:  # noqa: BLE001
+        return url
+
+
+def build_anthropic(cfg, query, max_results, allowed, blocked):
+    headers = {
+        "Content-Type": "application/json",
+        "x-api-key": cfg.get("apiKey", ""),
+        "anthropic-version": ANTHROPIC_API_VERSION,
+    }
+    web_search_tool: dict[str, Any] = {
+        "type": cfg.get("toolVersion") or ANTHROPIC_TOOL_VERSION,
+        "name": "web_search",
+    }
+    max_uses = cfg.get("maxUses")
+    if isinstance(max_uses, int) and max_uses > 0:
+        web_search_tool["max_uses"] = max_uses
+    if allowed:
+        web_search_tool["allowed_domains"] = list(allowed)
+    elif blocked:
+        web_search_tool["blocked_domains"] = list(blocked)
+    if isinstance(cfg.get("userLocation"), dict):
+        web_search_tool["user_location"] = {"type": "approximate", **cfg["userLocation"]}
+
+    body = {
+        "model": cfg.get("model") or DEFAULT_MODELS["anthropic"],
+        "max_tokens": int(cfg.get("maxTokens") or 2048),
+        "messages": [{"role": "user", "content": query}],
+        "tools": [web_search_tool],
+    }
+    return ("POST", _resolve_endpoint("anthropic", cfg), headers, body)
+
+
+def normalize_anthropic(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    seen_urls: set[str] = set()
+
+    final_text_pieces: list[str] = []
+    citations: list[dict[str, Any]] = []
+    raw_results: list[dict[str, Any]] = []
+
+    for block in payload.get("content") or []:
+        if not isinstance(block, dict):
+            continue
+        block_type = block.get("type")
+        if block_type == "text" and isinstance(block.get("text"), str):
+            final_text_pieces.append(block["text"])
+            for citation in block.get("citations") or []:
+                if isinstance(citation, dict):
+                    citations.append(citation)
+        elif block_type == "web_search_tool_result":
+            inner = block.get("content")
+            if isinstance(inner, list):
+                for raw in inner:
+                    if isinstance(raw, dict) and raw.get("type") == "web_search_result":
+                        raw_results.append(raw)
+
+    text = "\n\n".join(final_text_pieces).strip() or None
+
+    # Build canonical results from raw_results, enriched with cited_text from citations.
+    citation_by_url: dict[str, str] = {}
+    for citation in citations:
+        url = citation.get("url")
+        cited = citation.get("cited_text")
+        if isinstance(url, str) and isinstance(cited, str) and url not in citation_by_url:
+            citation_by_url[url] = cited
+
+    for raw in raw_results:
+        url = raw.get("url")
+        if not isinstance(url, str) or url in seen_urls:
+            continue
+        seen_urls.add(url)
+        result = _make_result(
+            raw.get("title"),
+            url,
+            snippet=citation_by_url.get(url) or text,
+            published_at=raw.get("page_age") if isinstance(raw.get("page_age"), str) else None,
+        )
+        if result:
+            out.append(result)
+
+    # If raw web_search_tool_result was empty (rare; tool refused) but citations
+    # exist, build results from citations.
+    if not out:
+        for citation in citations:
+            url = citation.get("url")
+            if not isinstance(url, str) or url in seen_urls:
+                continue
+            seen_urls.add(url)
+            result = _make_result(
+                citation.get("title") or url,
+                url,
+                snippet=citation.get("cited_text") if isinstance(citation.get("cited_text"), str) else text,
+            )
+            if result:
+                out.append(result)
+    return out
+
+
+PROVIDER_BUILDERS: dict[str, Callable[..., tuple[str, str, dict[str, str], dict[str, Any] | None]]] = {
+    "duckduckgo": build_duckduckgo,
+    "mwmbl": build_mwmbl,
+    "exa": build_exa,
+    "tavily": build_tavily,
+    "brave": build_brave,
+    "serper": build_serper,
+    "google-cse": build_google_cse,
+    "z-ai": build_z_ai,
+    "perplexity": build_perplexity,
+    "xai": build_xai,
+    "openai": build_openai,
+    "anthropic": build_anthropic,
+}
+
+PROVIDER_NORMALIZERS: dict[str, Callable[[dict[str, Any]], list[dict[str, Any]]]] = {
+    "duckduckgo": normalize_duckduckgo,
+    "mwmbl": normalize_mwmbl,
+    "exa": normalize_exa,
+    "tavily": normalize_tavily,
+    "brave": normalize_brave,
+    "serper": normalize_serper,
+    "google-cse": normalize_google_cse,
+    "z-ai": normalize_z_ai,
+    "perplexity": normalize_perplexity,
+    "xai": lambda p: normalize_responses_api(p, fallback_provider="xai"),
+    "openai": lambda p: normalize_responses_api(p, fallback_provider="openai"),
+    "anthropic": normalize_anthropic,
+}
+
+
+# --------------------------------------------------------------------------- #
+# Search execution
+# --------------------------------------------------------------------------- #
+
+
+def search_one(
+    provider: str,
+    cfg: dict[str, Any],
+    *,
+    query: str,
+    max_results: int,
+    allowed_domains: list[str] | None,
+    blocked_domains: list[str] | None,
+    output_dir: Path,
+) -> dict[str, Any]:
+    """Run a single provider, write raw + normalized JSON to disk, return manifest."""
+    if provider not in PROVIDER_BUILDERS:
+        raise ProviderError(provider, f"Unknown provider. Supported: {', '.join(PROVIDERS)}")
+    if not _has_credentials(provider, cfg):
+        raise ProviderError(provider, "Missing credentials. See references/setup.md")
+
+    started = time.monotonic()
+    started_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+    method, url, headers, body = PROVIDER_BUILDERS[provider](
+        cfg, query, max_results, allowed_domains, blocked_domains
+    )
+
+    try:
+        status, payload = http_request(method, url, headers=headers, body=body)
+    except WebSearchError as exc:
+        raise ProviderError(provider, str(exc)) from exc
+
+    duration_ms = int((time.monotonic() - started) * 1000)
+
+    if status >= 400:
+        # Surface API errors with provider context.
+        message = _extract_error_message(payload) or f"HTTP {status}"
+        # Still write the raw response to disk so the caller can inspect it.
+        raw_path = output_dir / f"{provider}-raw.json"
+        raw_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+        raise ProviderError(provider, message, status=status)
+
+    raw_path = output_dir / f"{provider}-raw.json"
+    raw_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    try:
+        normalized = PROVIDER_NORMALIZERS[provider](payload)
+    except Exception as exc:  # noqa: BLE001 — keep parse failures recoverable
+        raise ProviderError(provider, f"Failed to parse response: {exc}") from exc
+
+    truncated = len(normalized) > max_results
+    if truncated:
+        normalized = normalized[:max_results]
+
+    result_path = output_dir / f"{provider}.json"
+    manifest = {
+        "provider": provider,
+        "query": query,
+        "endpoint": url,
+        "method": method,
+        "status": status,
+        "startedAt": started_at,
+        "durationMs": duration_ms,
+        "maxResults": max_results,
+        "truncated": truncated,
+        "results": normalized,
+        "files": {
+            "raw": str(raw_path),
+            "normalized": str(result_path),
+        },
+    }
+    result_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
+    return manifest
+
+
+def _extract_error_message(payload: dict[str, Any]) -> str | None:
+    if not isinstance(payload, dict):
+        return None
+    err = payload.get("error")
+    if isinstance(err, dict):
+        message = err.get("message") or err.get("type")
+        if isinstance(message, str):
+            return message
+    if isinstance(err, str):
+        return err
+    if isinstance(payload.get("message"), str):
+        return payload["message"]
+    if isinstance(payload.get("_raw"), str):
+        return payload["_raw"][:500]
+    return None
+
+
+def search_with_fallback(
+    chain: list[str],
+    config: dict[str, Any],
+    *,
+    query: str,
+    max_results: int,
+    allowed_domains: list[str] | None,
+    blocked_domains: list[str] | None,
+    output_dir: Path,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Run providers sequentially in chain order, stopping at the first that
+    returns a non-empty result list.
+
+    Earlier failures are captured in `errors[]` so the caller can see what
+    was tried. The successful manifest (if any) is the only entry in
+    `manifests[]`.
+    """
+    output_dir.mkdir(parents=True, exist_ok=True)
+    manifests: list[dict[str, Any]] = []
+    errors: list[dict[str, Any]] = []
+
+    for provider in chain:
+        outcome = _run_one_safely(
+            provider,
+            config,
+            query,
+            max_results,
+            allowed_domains,
+            blocked_domains,
+            output_dir,
+        )
+        if isinstance(outcome, ProviderError):
+            errors.append(
+                {"provider": outcome.provider, "error": str(outcome), "status": outcome.status}
+            )
+            continue
+        if outcome.get("results"):
+            manifests.append(outcome)
+            return manifests, errors
+        # 200 OK but zero results — record as a soft fallthrough and try the
+        # next provider. Keep the manifest available in `errors` so callers
+        # can still inspect what came back.
+        errors.append(
+            {
+                "provider": provider,
+                "error": "0 results — falling through to next in chain",
+                "status": outcome.get("status"),
+            }
+        )
+
+    return manifests, errors
+
+
+def search_many(
+    providers: list[str],
+    config: dict[str, Any],
+    *,
+    query: str,
+    max_results: int,
+    allowed_domains: list[str] | None,
+    blocked_domains: list[str] | None,
+    output_dir: Path,
+    parallelism: int,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Run multiple providers concurrently using a thread pool.
+
+    Threads are the right primitive here. Every provider call is a single
+    HTTP request, so we are I/O-bound, the GIL is released while urllib
+    waits on the socket, and thread startup is free relative to the 300 ms-
+    30 s a real API call takes.
+    """
+    output_dir.mkdir(parents=True, exist_ok=True)
+    manifests: list[dict[str, Any]] = []
+    errors: list[dict[str, Any]] = []
+
+    workers = min(parallelism, len(providers)) or 1
+    if workers == 1:
+        for provider in providers:
+            manifest_or_error = _run_one_safely(
+                provider, config, query, max_results, allowed_domains, blocked_domains, output_dir
+            )
+            if isinstance(manifest_or_error, ProviderError):
+                errors.append({"provider": manifest_or_error.provider, "error": str(manifest_or_error), "status": manifest_or_error.status})
+            else:
+                manifests.append(manifest_or_error)
+        return manifests, errors
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = {
+            pool.submit(
+                _run_one_safely,
+                provider,
+                config,
+                query,
+                max_results,
+                allowed_domains,
+                blocked_domains,
+                output_dir,
+            ): provider
+            for provider in providers
+        }
+        for future in as_completed(futures):
+            outcome = future.result()
+            if isinstance(outcome, ProviderError):
+                errors.append({"provider": outcome.provider, "error": str(outcome), "status": outcome.status})
+            else:
+                manifests.append(outcome)
+    return manifests, errors
+
+
+def _run_one_safely(
+    provider: str,
+    config: dict[str, Any],
+    query: str,
+    max_results: int,
+    allowed: list[str] | None,
+    blocked: list[str] | None,
+    output_dir: Path,
+) -> dict[str, Any] | ProviderError:
+    try:
+        return search_one(
+            provider,
+            (config["providers"].get(provider) or {}),
+            query=query,
+            max_results=max_results,
+            allowed_domains=allowed,
+            blocked_domains=blocked,
+            output_dir=output_dir,
+        )
+    except ProviderError as exc:
+        return exc
+    except Exception as exc:  # noqa: BLE001 — bubble up as ProviderError
+        return ProviderError(provider, f"Unexpected error: {exc}")
+
+
+# --------------------------------------------------------------------------- #
+# CLI
+# --------------------------------------------------------------------------- #
+
+
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="web-search",
+        description="LLM-neutral web search across multiple providers (single CLI, "
+        "multi-provider parallel, results saved to disk for piping through rg/jq).",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=textwrap_dedent(
+            """
+            Examples:
+              web-search "kubernetes 1.31 release notes"
+              web-search --provider tavily "current python version"
+              web-search --providers tavily,brave "..."
+              web-search --all "fan out across every configured provider"
+              web-search "..." --include docs.python.org
+              web-search "..." --max-results 5 --print-path-only
+              web-search --list-providers
+              web-search --check
+
+            Configuration:
+              $WEBSEARCH_CONFIG               Override config file path
+              ~/.config/web-search/config.json    Standard location
+              ~/.web-search.json                  Home-level fallback
+              ./web-search.json                    Project-level
+
+              Env-var fallbacks (used only if config file missing the entry):
+                EXA_API_KEY, TAVILY_API_KEY, BRAVE_API_KEY, SERPER_API_KEY,
+                GOOGLE_CSE_API_KEY, GOOGLE_CSE_ID, Z_AI_API_KEY,
+                PERPLEXITY_API_KEY, XAI_API_KEY, OPENAI_API_KEY,
+                ANTHROPIC_API_KEY.
+
+            Output:
+              Results are written to /tmp/web-search/<run-id>/<provider>.json (raw + normalized)
+              along with a combined manifest. The path is printed to stdout so you can pipe it:
+
+                jq '.results[].url' "$(web-search --print-path-only "...")"
+                rg -i "release" "$(web-search --print-path-only "...")"
+
+              See references/pipelines.md for more recipes.
+            """
+        ),
+    )
+    parser.add_argument("query", nargs="?", help="The search query string. Required unless --list-providers or --check.")
+    parser.add_argument("--provider", help="Use a single provider (overrides default).")
+    parser.add_argument("--providers", help="Comma-separated subset of providers to run in parallel.")
+    parser.add_argument("--all", action="store_true", help="Run all configured providers in parallel.")
+    parser.add_argument("--max-results", type=int, help="Cap results per provider (default 10).")
+    parser.add_argument("--include", help="Comma-separated domain allow-list (overrides config).")
+    parser.add_argument("--exclude", help="Comma-separated domain block-list (overrides config).")
+    parser.add_argument("--config", help="Override config file path.")
+    parser.add_argument("--tmp-dir", help="Override temp output directory (default /tmp/web-search).")
+    parser.add_argument("--parallelism", type=int, default=8, help="Max concurrent provider calls (default 8).")
+    parser.add_argument("--raw", action="store_true", help="Print raw response JSON instead of preview.")
+    parser.add_argument("--json", dest="json_output", action="store_true", help="Print machine-readable JSON manifest to stdout.")
+    parser.add_argument("--print-path-only", action="store_true", help="Print only the result file path. Useful inside $(...).")
+    parser.add_argument("--no-preview", action="store_true", help="Skip the human-readable preview section.")
+    parser.add_argument("--list-providers", action="store_true", help="List configured providers and exit.")
+    parser.add_argument("--check", action="store_true", help="Validate config and credentials, then exit.")
+    parser.add_argument("--version", "-V", action="version", version=f"web-search {VERSION}")
+    return parser
+
+
+def textwrap_dedent(text: str) -> str:
+    import textwrap
+
+    return textwrap.dedent(text).strip("\n")
+
+
+def _split_csv(value: str | None) -> list[str] | None:
+    if not value:
+        return None
+    items = [item.strip() for item in value.split(",")]
+    items = [i for i in items if i]
+    return items or None
+
+
+def _resolve_provider_list(
+    args: argparse.Namespace,
+    config: dict[str, Any],
+) -> tuple[list[str], str]:
+    """Resolve which providers to call, and the execution mode.
+
+    Returns (providers, mode) where mode is one of:
+      - "single"   : one provider; run it directly
+      - "parallel" : multiple providers; run concurrently, aggregate all
+      - "fallback" : ordered chain; run sequentially, stop on first non-empty
+    """
+    if args.all:
+        configured = [p for p in PROVIDERS if _has_credentials(p, config["providers"].get(p, {}))]
+        if not configured:
+            raise ConfigError("No provider has credentials. See references/setup.md.")
+        return configured, "parallel"
+    if args.providers:
+        names = _split_csv(args.providers) or []
+        for name in names:
+            if name not in PROVIDERS:
+                raise ConfigError(f"Unknown provider '{name}'. Supported: {', '.join(PROVIDERS)}")
+        return names, "parallel" if len(names) > 1 else "single"
+    if args.provider:
+        if args.provider not in PROVIDERS:
+            raise ConfigError(f"Unknown provider '{args.provider}'. Supported: {', '.join(PROVIDERS)}")
+        return [args.provider], "single"
+
+    default = config.get("default")
+    raw_fallback = config.get("fallback")
+    fallback_chain: list[str] = []
+    if isinstance(raw_fallback, list):
+        fallback_chain = [name for name in raw_fallback if isinstance(name, str)]
+    elif isinstance(raw_fallback, str) and raw_fallback.strip():
+        fallback_chain = [raw_fallback.strip()]
+
+    chain: list[str] = []
+    if isinstance(default, str) and default.strip():
+        chain.append(default.strip())
+    for name in fallback_chain:
+        if name and name not in chain:
+            chain.append(name)
+    chain = [name for name in chain if name in PROVIDERS]
+
+    if not chain:
+        raise ConfigError(
+            "No default provider configured. Pass --provider/--providers/--all, "
+            "or set `default` (and optionally `fallback`) in your config file."
+        )
+
+    # Drop providers in the chain that have no credentials. Skipping is the
+    # whole point of a fallback chain — it lets a user configure ['brave',
+    # 'openai', 'duckduckgo'] today and start using openai automatically the
+    # moment they paste a key in.
+    runnable = [name for name in chain if _has_credentials(name, config["providers"].get(name, {}))]
+    if not runnable:
+        raise ConfigError(
+            f"Default chain {chain} has no credentialed provider. Configure at least one, "
+            "or use --provider duckduckgo / --provider mwmbl."
+        )
+
+    if len(runnable) == 1:
+        return runnable, "single"
+    return runnable, "fallback"
+
+
+def _make_run_dir(tmp_dir: Path) -> Path:
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    run_dir = tmp_dir / timestamp
+    suffix = 0
+    while run_dir.exists():
+        suffix += 1
+        run_dir = tmp_dir / f"{timestamp}-{suffix}"
+    run_dir.mkdir(parents=True, exist_ok=True)
+    return run_dir
+
+
+def _print_preview(manifests: list[dict[str, Any]], errors: list[dict[str, Any]]) -> None:
+    if not manifests and not errors:
+        return
+    for manifest in manifests:
+        provider = manifest["provider"]
+        results = manifest.get("results") or []
+        sys.stdout.write(f"\n=== {provider} ({len(results)} results, {manifest['durationMs']}ms) ===\n")
+        for idx, item in enumerate(results, 1):
+            title = item.get("title") or "(no title)"
+            url = item.get("url") or ""
+            sys.stdout.write(f"  [{idx}] {title}\n      {url}\n")
+            snippet = item.get("snippet")
+            if snippet:
+                sys.stdout.write(f"      {_summarize(snippet, 200)}\n")
+    if errors:
+        sys.stdout.write("\n=== ERRORS ===\n")
+        for err in errors:
+            sys.stdout.write(f"  [{err['provider']}] {err['error']}\n")
+
+
+def _summarize(text: str, limit: int) -> str:
+    text = re.sub(r"\s+", " ", text).strip()
+    if len(text) <= limit:
+        return text
+    return text[: limit - 1].rstrip() + "…"
+
+
+def _print_machine_footer(
+    run_dir: Path,
+    manifests: list[dict[str, Any]],
+    errors: list[dict[str, Any]],
+    combined_path: Path,
+    *,
+    exec_mode: str = "single",
+) -> None:
+    sys.stdout.write("\n--- WEBSEARCH ---\n")
+    sys.stdout.write(f"RESULT_FILE: {combined_path}\n")
+    sys.stdout.write(f"RUN_DIR: {run_dir}\n")
+    sys.stdout.write(f"MODE: {exec_mode}\n")
+    sys.stdout.write(f"PROVIDERS: {','.join(m['provider'] for m in manifests)}\n")
+    sys.stdout.write(f"TOTAL_RESULTS: {sum(len(m.get('results') or []) for m in manifests)}\n")
+    if errors:
+        sys.stdout.write(f"FALLBACK_TRIED: {','.join(e['provider'] for e in errors)}\n")
+
+
+def cmd_list_providers(config: dict[str, Any]) -> int:
+    print(f"# Configured providers (config source: {config.get('_source') or '<env vars only>'})\n")
+    for provider in PROVIDERS:
+        cfg = config["providers"].get(provider) or {}
+        ok = _has_credentials(provider, cfg)
+        marker = "[OK]" if ok else "[--]"
+        endpoint = _resolve_endpoint(provider, cfg)
+        notes: list[str] = []
+        if cfg.get("model"):
+            notes.append(f"model={cfg['model']}")
+        if cfg.get("baseUrl"):
+            notes.append("baseUrl-overridden")
+        suffix = f"  ({', '.join(notes)})" if notes else ""
+        print(f"{marker} {provider:<12}  {endpoint}{suffix}")
+
+    print(f"\nDefault provider: {config.get('default') or '(none)'}")
+
+    raw_fallback = config.get("fallback")
+    fallback: list[str] = []
+    if isinstance(raw_fallback, list):
+        fallback = [name for name in raw_fallback if isinstance(name, str)]
+    elif isinstance(raw_fallback, str) and raw_fallback.strip():
+        fallback = [raw_fallback.strip()]
+
+    if fallback:
+        chain: list[str] = []
+        default = config.get("default")
+        if isinstance(default, str) and default.strip():
+            chain.append(default.strip())
+        for name in fallback:
+            if name not in chain:
+                chain.append(name)
+        annotated: list[str] = []
+        for name in chain:
+            credentialed = _has_credentials(name, config["providers"].get(name, {}))
+            annotated.append(name if credentialed else f"{name} (skipped: no credentials)")
+        print(f"Fallback chain:   {' -> '.join(annotated)}")
+    return 0
+
+
+def cmd_check(config: dict[str, Any]) -> int:
+    notes: list[str] = []
+    issues: list[str] = []
+
+    if not config.get("_source"):
+        notes.append(
+            "No config file found. Using env vars only — zero-config providers (duckduckgo, mwmbl) "
+            "still work. To unlock more providers create one with "
+            "`cp config/config.example.json ~/.config/web-search/config.json`."
+        )
+
+    found_keyed = False
+    found_any = False
+    for provider in PROVIDERS:
+        cfg = config["providers"].get(provider) or {}
+        if not _has_credentials(provider, cfg):
+            continue
+        found_any = True
+        # "Keyed" means an actual API key was supplied. Exa is in the credentials
+        # list because it accepts anonymous calls, but without `apiKey` it is not
+        # meaningfully "configured" beyond the always-on zero-config tier.
+        if provider in _NO_AUTH_PROVIDERS:
+            continue
+        if isinstance(cfg, dict) and _truthy_str(cfg.get("apiKey")):
+            found_keyed = True
+        elif provider == "google-cse" and isinstance(cfg, dict) and _truthy_str(cfg.get("searchEngineId")):
+            found_keyed = True
+
+    if not found_any:
+        # Should never happen because duckduckgo/mwmbl are always available, but
+        # guard for the case where someone disables the no-auth providers in a fork.
+        issues.append("No provider has credentials. See references/setup.md.")
+
+    if config.get("default") and not _has_credentials(
+        config["default"], config["providers"].get(config["default"], {})
+    ):
+        issues.append(
+            f"Default provider '{config['default']}' has no credentials. Pick another `default` "
+            "or configure it."
+        )
+
+    for note in notes:
+        print(f"NOTE: {note}", file=sys.stderr)
+    if issues:
+        for issue in issues:
+            print(f"WARN: {issue}", file=sys.stderr)
+        return 1
+
+    if found_keyed:
+        print("OK: at least one keyed provider configured. Run `web-search --list-providers` for details.")
+    else:
+        print("OK: zero-config providers ready (duckduckgo, mwmbl). Run `web-search --list-providers` for details.")
+    return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = _build_parser()
+    args = parser.parse_args(argv)
+
+    try:
+        config = load_config(args.config)
+    except ConfigError as exc:
+        print(f"config error: {exc}", file=sys.stderr)
+        return 2
+
+    if args.list_providers:
+        return cmd_list_providers(config)
+    if args.check:
+        return cmd_check(config)
+
+    if not args.query:
+        parser.print_help(sys.stderr)
+        return 2
+
+    try:
+        providers, exec_mode = _resolve_provider_list(args, config)
+    except ConfigError as exc:
+        print(f"config error: {exc}", file=sys.stderr)
+        return 2
+
+    max_results = args.max_results or int(config.get("maxResults") or 10)
+    allowed = _split_csv(args.include) or config.get("allowedDomains") or None
+    blocked = _split_csv(args.exclude) or config.get("blockedDomains") or None
+    if allowed and blocked:
+        print(
+            "warning: both allowed and blocked domains supplied; using allowed list only "
+            "(matches pi-websearch behavior).",
+            file=sys.stderr,
+        )
+        blocked = None
+
+    tmp_root = Path(args.tmp_dir or config.get("tmpDir") or DEFAULT_TMP_DIR).expanduser()
+    run_dir = _make_run_dir(tmp_root)
+
+    if exec_mode == "fallback":
+        manifests, errors = search_with_fallback(
+            providers,
+            config,
+            query=args.query,
+            max_results=max_results,
+            allowed_domains=allowed,
+            blocked_domains=blocked,
+            output_dir=run_dir,
+        )
+    else:
+        manifests, errors = search_many(
+            providers,
+            config,
+            query=args.query,
+            max_results=max_results,
+            allowed_domains=allowed,
+            blocked_domains=blocked,
+            output_dir=run_dir,
+            parallelism=args.parallelism,
+        )
+
+    combined_payload = {
+        "query": args.query,
+        "ranAt": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "execMode": exec_mode,
+        "chain": providers if exec_mode == "fallback" else None,
+        "providers": [m["provider"] for m in manifests],
+        "manifests": manifests,
+        "errors": errors,
+        "runDir": str(run_dir),
+    }
+    combined_path = run_dir / "combined.json"
+    combined_path.write_text(
+        json.dumps(combined_payload, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+
+    if args.print_path_only:
+        print(combined_path)
+        return 0 if manifests else 1
+
+    if args.json_output:
+        print(json.dumps(combined_payload, indent=2, ensure_ascii=False))
+        return 0 if manifests else 1
+
+    if args.raw:
+        for manifest in manifests:
+            sys.stdout.write(f"\n=== {manifest['provider']} (raw) ===\n")
+            raw = Path(manifest["files"]["raw"])
+            sys.stdout.write(raw.read_text(encoding="utf-8"))
+            sys.stdout.write("\n")
+    elif not args.no_preview:
+        _print_preview(manifests, errors)
+
+    _print_machine_footer(run_dir, manifests, errors, combined_path, exec_mode=exec_mode)
+    return 0 if manifests else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
