@@ -1,0 +1,16 @@
+# My OS — nunca commite segredos. Keys ficam no navegador (localStorage), nunca no repo.
+.env
+.env.local
+config.json
+config.local.json
+*config.real.json
+nexus-backup*.json
+__pycache__/
+*.pyc
+.pytest_cache/
+node_modules/
+.DS_Store
+Thumbs.db
+*.log
+.vscode/
+.idea/

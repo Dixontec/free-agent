@@ -1,0 +1,23 @@
+{
+  "$comment": "Golden tasks do My OS Harness. parse = matriz compartilhada (Node: tools-registry | Browser: app.js) — mesma fonte, sem drift. browser = cenários comportamentais executados via ?eval=1.",
+  "parse": [
+    { "input": "<tool name=\"web_search\">lançamentos IA</tool>", "tool": "web_search", "arg": "lançamentos IA" },
+    { "input": "<tool name=\"web_open\">https://example.com/a</tool>", "tool": "web_open", "arg": "https://example.com/a" },
+    { "input": "<tool name=\"open_site\">gmail</tool>", "tool": "open_site", "arg": "gmail" },
+    { "input": "<tool name=\"run_skill\">noticias-digest</tool>", "tool": "run_skill", "arg": "noticias-digest" },
+    { "input": "<tool name=\"music_search\">lofi</tool>", "tool": "music_search", "arg": "lofi" },
+    { "input": "<tool name=\"music_download\">jazz piano</tool>", "tool": "music_download", "arg": "jazz piano" },
+    { "input": "<tool name=\"create_task\">comprar pão</tool>", "tool": "create_task", "arg": "comprar pão" },
+    { "input": "<tool name=\"list_tasks\"></tool>", "tool": "list_tasks", "arg": "" },
+    { "input": "só texto, sem chamada", "tool": null, "arg": null }
+  ],
+  "browser": [
+    { "id": "task-create", "input": "crie uma tarefa comprar pão integral", "expect": { "tasksHas": "comprar pão integral" } },
+    { "id": "task-list", "input": "tenho alguma tarefa pendente?", "expect": { "chatHas": ["comprar pão integral"] } },
+    { "id": "task-empty", "setup": "clearTasks", "input": "tenho alguma tarefa?", "expect": { "chatHas": ["nenhuma tarefa"] } },
+    { "id": "music-pause-idle", "setup": "clearQueue", "input": "pausa", "expect": { "chatHas": ["Nada tocando"] } },
+    { "id": "music-next", "setup": "seedLocalWav", "input": "quero ouvir cantiga eval", "expect": { "nowTitle": "cantiga eval" } },
+    { "id": "music-pause-playing", "input": "pausa", "expect": { "audioPaused": true, "chatHas": ["Pausado"] } },
+    { "id": "log-tab", "input": "__internal_tab_log__", "expect": { "tabVisible": "log" } }
+  ]
+}

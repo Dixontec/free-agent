@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="glass">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>My OS · AI Harness</title>
+<meta name="description" content="My OS — harness premium para orquestrar Groq, OpenAI, Gemini, rotinas, tarefas e skills." />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%230071e3'/%3E%3Cstop offset='.6' stop-color='%237d2aff'/%3E%3Cstop offset='1' stop-color='%23ff2fb3'/%3E%3C/linearGradient%3E%3C/defs%3E%3Ccircle cx='16' cy='16' r='13' fill='none' stroke='url(%23g)' stroke-width='2.5'/%3E%3Ccircle cx='16' cy='16' r='5' fill='url(%23g)'/%3E%3C/svg%3E" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&family=Space+Grotesk:wght@500;600;700&family=Unbounded:wght@600;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css" />
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<script type="importmap">
+{ "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+</script>
+</head>
+<body>
+<canvas id="bg3d"></canvas>
+<div id="aurora" aria-hidden="true"><span class="blob b1"></span><span class="blob b2"></span><span class="blob b3"></span></div>
+<div id="bgCustom" aria-hidden="true"></div>
+<video id="bgVideo" muted loop playsinline preload="auto" aria-hidden="true"></video>
+
+<div id="app">
+  <!-- ══════════ TOPBAR ══════════ -->
+  <header id="topbar" class="glass-card">
+    <button class="brand" id="brandCore" title="Abrir o Núcleo">
+      <span class="wordmark"><b>MY OS</b><small>AI HARNESS</small></span>
+    </button>
+    <div class="top-center"></div>
+    <div class="top-right">
+      <div id="connStatus" class="conn"><i data-lucide="wifi"></i><span class="dot"></span><span id="connLabel">desconectado</span></div>
+      <button id="btnCore" class="btn ghost" title="Abrir o Núcleo"><i data-lucide="orbit"></i>Núcleo<span id="coreBadge" class="badge" hidden>0</span></button>
+      <button id="btnNewChat" class="btn ghost" title="Nova conversa"><i data-lucide="plus"></i>Nova</button>
+      <button id="btnSettings" class="btn ghost icon-only" title="Configurações"><i data-lucide="settings"></i></button>
+    </div>
+  </header>
+
+  <main id="layout">
+    <!-- ══════════ SIDEBAR ESQUERDA ══════════ -->
+    <aside id="sidebar" class="glass-card">
+      <section class="side-block">
+        <h2><i data-lucide="history"></i> Conversas <button id="btnNewConv" class="linkbtn" title="Nova conversa"><i data-lucide="plus"></i>nova</button></h2>
+        <div id="convList" class="convlist"></div>
+      </section>
+
+      <section class="side-block" id="agentsSide">
+        <h2><i data-lucide="bot"></i> Agentes <button id="btnNewAgent" class="linkbtn" title="Novo agente"><i data-lucide="plus"></i>novo</button></h2>
+        <div id="mainAgentCard"></div>
+        <div id="agentList" class="agentlist"></div>
+        <form id="agentForm" hidden>
+          <div class="grid2">
+            <label class="fld"><span>Nome</span><input id="aName" maxlength="32" placeholder="Pesquisador" /></label>
+            <label class="fld"><span>Ícone</span><input id="aIcon" list="lucideList" placeholder="bot" /></label>
+          </div>
+          <label class="fld"><span>Personalidade / papel</span><textarea id="aPerson" rows="3" placeholder="Você é um pesquisador objetivo. Responda em português, com fontes…"></textarea></label>
+          <div class="btnrow">
+            <button type="submit" class="btn primary sm"><i data-lucide="save"></i>Salvar</button>
+            <button type="button" id="btnCancelAgent" class="btn ghost sm">Cancelar</button>
+          </div>
+        </form>
+        <form id="mainAgentForm" hidden>
+          <label class="fld"><span>Nome do principal</span><input id="mName" maxlength="32" /></label>
+          <label class="fld"><span>Personalidade</span><textarea id="mPerson" rows="3"></textarea></label>
+          <div class="btnrow">
+            <button type="button" id="btnSaveMain" class="btn primary sm"><i data-lucide="save"></i>Salvar</button>
+            <button type="button" id="btnCancelMain" class="btn ghost sm">Cancelar</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="side-block min" id="musicSide">
+        <h2 id="musicSideHead" title="Mostrar/ocultar player"><i data-lucide="music"></i> Música <span id="sbDot" class="mside-dot" data-state="idle"></span><button id="sbToggle" class="linkbtn" title="Mostrar/ocultar player"><i data-lucide="chevron-down"></i></button></h2>
+        <div class="mside-body">
+          <div class="mside-card">
+            <div class="mside-cover" id="sbCover"><i data-lucide="music"></i></div>
+            <div class="mside-meta"><b id="sbTitle">Nada tocando</b><small id="sbArtist">toque + arquivos ou peça no chat</small></div>
+          </div>
+          <input id="sbProg" type="range" min="0" max="100" value="0" title="Progresso" />
+          <div class="mside-ctrl">
+            <button id="sbPrev" class="btn ghost sm icon-only" title="Anterior"><i data-lucide="skip-back"></i></button>
+            <button id="sbPlay" class="btn primary sm icon-only" title="Play/Pause"><i data-lucide="play"></i></button>
+            <button id="sbNext" class="btn ghost sm icon-only" title="Próxima"><i data-lucide="skip-forward"></i></button>
+            <span id="sbTime" class="mono"></span>
+          </div>
+          <div class="btnrow mside-add">
+            <button id="sbAdd" class="btn ghost sm"><i data-lucide="plus"></i>arquivos</button>
+            <button id="sbFolder" class="btn ghost sm"><i data-lucide="folder"></i>pasta</button>
+          </div>
+          <input id="filePick" type="file" accept="audio/*,.mp3,.ogg,.wav,.m4a,.flac,.opus" multiple hidden />
+          <input id="folderPick" type="file" webkitdirectory multiple hidden />
+          <div id="sbLocal" class="mside-local"></div>
+          <p class="hint" style="margin:6px 0 0">No chat: <code>toca &lt;nome&gt;</code> · <code>pausa</code> · <code>próxima</code></p>
+        </div>
+      </section>
+
+      <section class="side-block min" id="skillsSide">
+        <h2 id="skillsSideHead" title="Mostrar/ocultar skills"><i data-lucide="layers"></i> Skills ativas <button id="skToggle" class="linkbtn" title="Mostrar/ocultar skills"><i data-lucide="chevron-down"></i></button></h2>
+        <div id="sideSkills" class="miniskills"></div>
+      </section>
+      <section class="side-block" id="sysmon">
+        <div class="sm-head"><i data-lucide="activity"></i><b>Sistema</b><span class="sm-live"></span><span class="sm-cores" id="smCpuCores">—</span><button id="smToggle" class="sm-toggle" title="Mostrar/ocultar detalhes"><i data-lucide="monitor"></i></button></div>
+        <div class="sm-body">
+          <div class="sm-row"><span>CPU</span><div class="sm-bar"><i id="smCpuBar"></i></div><b id="smCpu">—</b></div>
+          <div class="sm-sub" id="smCpuSub">medindo…</div>
+          <div class="sm-row"><span>Energia</span><div class="sm-bar"><i id="smBatBar"></i></div><b id="smBat">—</b></div>
+          <div class="sm-sub" id="smBatSub">—</div>
+          <div class="sm-row"><span>RAM</span><div class="sm-bar"><i id="smRamBar"></i></div><b id="smRam">—</b></div>
+          <div class="sm-row gpu"><span>GPU</span><b id="smGpu">—</b></div>
+        </div>
+      </section>
+      <p class="devby">developed by <a href="https://www.youtube.com/@Dixon_tec" target="_blank" rel="noopener"><i data-lucide="youtube"></i>Dixon</a></p>
+    </aside>
+
+    <!-- ══════════ CHAT CENTRAL ══════════ -->
+    <section id="chatPane" class="glass-card">
+      <div id="chatHeader">
+        <div class="core-row">
+        <button id="coreMini" class="core-mini" title="Abrir o Núcleo">
+          <span class="cm-pulse" id="cmDot"></span>
+          <span class="cm-text"><b id="coreStatus">Sistemas nominais</b><small id="coreSub">Núcleo em espera · clique para expandir</small></span>
+          <span class="cm-mood" id="moodLabel">ocioso</span>
+        </button>
+        <button id="btnQuickNew" class="btn ghost sm" title="Nova conversa"><i data-lucide="plus"></i>Nova</button>
+        </div>
+        <div class="chips" id="quickChips">
+          <button data-prompt="Faça uma pesquisa na web sobre: inteligência artificial hoje, e me traga um resumo com fontes."><i data-lucide="search"></i>Pesquisar web</button>
+          <button data-prompt="Me traga as principais notícias de tecnologia de hoje em tópicos curtos em português."><i data-lucide="newspaper"></i>Notícias de hoje</button>
+          <button data-prompt="Crie uma rotina da manhã para as 08:00 que toca minha música, mostra notícias e abre meus apps."><i data-lucide="alarm-clock"></i>Rotina 08:00</button>
+          <button id="btnAddChip" class="chip-add" title="Adicionar botão personalizado"><i data-lucide="plus"></i></button>
+        </div>
+        <div id="chipForm" hidden>
+          <input id="chipLabel" maxlength="24" placeholder="Nome do botão · ex.: Roteiro YT" />
+          <input id="chipPrompt" placeholder="Prompt enviado à IA ao clicar…" />
+          <button id="chipSave" class="btn primary sm">Salvar</button>
+          <button id="chipCancel" class="btn ghost sm">Cancelar</button>
+          <div id="chipManage"></div>
+        </div>
+      </div>
+      <div id="messages"></div>
+      <div id="typing" hidden><span></span><span></span><span></span></div>
+      <div id="mediaDock" hidden>
+        <div class="media-head"><b id="mediaTitle"><i data-lucide="play"></i> Mídia</b><button id="mediaClose" class="btn ghost sm icon-only"><i data-lucide="x"></i></button></div>
+        <div id="mediaBody"></div>
+      </div>
+      <div id="composerBar">
+        <span class="cb-prov" id="quickProv"><i data-lucide="cpu"></i><b>—</b></span>
+        <select id="modelQuick" title="Modelo em uso"></select>
+        <button id="btnModelsQuick" class="btn ghost sm icon-only" title="Atualizar modelos da API"><i data-lucide="refresh-cw"></i></button>
+      </div>
+      <div id="ctxBar" title="Uso de contexto do modelo atual · clique para zerar"><span id="ctxLabel">—</span><div class="ctx-track"><i id="ctxFill"></i></div></div>
+      <form id="composer">
+        <button type="button" id="btnAttach" class="btn ghost icon-only" title="Anexar texto como contexto"><i data-lucide="paperclip"></i></button>
+        <button type="button" id="btnVoice" class="btn ghost icon-only" title="Falar (Ctrl+Espaço)"><i data-lucide="mic"></i></button>
+        <textarea id="input" rows="1" placeholder="Pergunte, peça pesquisa, notícia, rotina…  (Enter envia · Shift+Enter quebra)"></textarea>
+        <button type="submit" id="btnSend" class="btn primary icon-only" title="Enviar"><i data-lucide="send"></i></button>
+      </form>
+    </section>
+
+    <!-- ══════════ PAINEL DIREITO ══════════ -->
+    <aside id="panel" class="glass-card">
+      <div id="sandboxCard" class="sb-card" title="Monitor Nexus · clique para ampliar">
+        <div class="sb-bar"><span class="sb-dots"><i></i><i></i><i></i></span><b id="sandboxTitle">Nexus · standby</b><span class="sb-expand"><i data-lucide="maximize"></i></span></div>
+        <div id="sandboxScreen" class="sb-screen"></div>
+      </div>
+      <div id="clockWx" title="Hora e temperatura">
+        <div id="cxTime">--:--</div>
+        <div class="cx-sub"><span id="cxDate">—</span><span id="cxTemp"><span class="cx-na">—°</span></span></div>
+      </div>
+      <nav class="tabs">
+        <button data-tab="routines" class="active"><i data-lucide="alarm-clock"></i>Rotinas</button>
+        <button data-tab="music"><i data-lucide="music"></i>Música</button>
+        <button data-tab="skills"><i data-lucide="sparkles"></i>Skills</button>
+        <button data-tab="tasks"><i data-lucide="list-checks"></i>Tarefas</button>
+        <button data-tab="reminders"><i data-lucide="bell"></i>Lembretes</button>
+        <button data-tab="log"><i data-lucide="terminal"></i>Log</button>
+      </nav>
+
+      <div class="tabpage" id="tab-routines">
+        <div class="tabhead"><h3>Rotinas agendadas</h3><button id="btnNewRoutine" class="btn primary sm"><i data-lucide="plus"></i>Nova rotina</button></div>
+        <div id="routineList"></div>
+        <form id="routineForm" hidden>
+          <h4 id="routineFormTitle">Nova rotina</h4>
+          <label class="fld"><span>Nome</span><input id="rName" placeholder="Rotina da manhã" /></label>
+          <div class="grid2">
+            <label class="fld"><span>Hora</span><input id="rTime" type="time" value="08:00" /></label>
+            <label class="fld"><span>Repetir</span>
+              <select id="rRepeat"><option value="daily">Todo dia</option><option value="weekdays">Seg–Sex</option><option value="weekends">Fim de semana</option><option value="once">Uma vez</option></select>
+            </label>
+          </div>
+          <div class="days" id="rDays">
+            <button type="button" data-day="1" class="on">S</button><button type="button" data-day="2" class="on">T</button><button type="button" data-day="3" class="on">Q</button><button type="button" data-day="4" class="on">Q</button><button type="button" data-day="5" class="on">S</button><button type="button" data-day="6">S</button><button type="button" data-day="0">D</button>
+          </div>
+          <label class="fld"><span>Ações (uma por linha)</span>
+            <textarea id="rActions" rows="5" placeholder="musica: https://www.youtube.com/watch?v=VIDEO_ID&#10;noticias: tecnologia&#10;prompt: Resuma meu dia com foco e bom humor&#10;abrir: https://gmail.com"></textarea>
+          </label>
+          <div class="syntax">
+            <code>musica: URL</code> <code>youtube: URL</code> <code>noticias: tema</code><br>
+            <code>prompt: instrução p/ IA</code> <code>abrir: URL</code> <code>skill: nome-da-skill</code>
+          </div>
+          <div class="btnrow">
+            <button type="submit" class="btn primary sm"><i data-lucide="save"></i>Salvar rotina</button>
+            <button type="button" id="btnCancelRoutine" class="btn ghost sm">Cancelar</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="tabpage" id="tab-skills" hidden>
+        <div class="tabhead"><h3>Catálogo de Skills</h3><button id="btnNewSkill" class="btn primary sm"><i data-lucide="plus"></i>Nova skill</button></div>
+        <p class="hint">Skills são capacidades plugáveis que a IA pode invocar. Edite, ative/desative ou crie as suas.</p>
+        <div id="skillList"></div>
+        <form id="skillForm" hidden>
+          <h4 id="skillFormTitle">Nova skill</h4>
+          <div class="grid2">
+            <label class="fld"><span>Nome (slug)</span><input id="sSlug" placeholder="minha-pesquisa" /></label>
+            <label class="fld"><span>Ícone (Lucide)</span><input id="sIcon" list="lucideList" placeholder="search" />
+              <datalist id="lucideList">
+                <option value="search"></option><option value="newspaper"></option><option value="alarm-clock"></option>
+                <option value="play"></option><option value="music"></option><option value="rocket"></option>
+                <option value="file-text"></option><option value="terminal"></option><option value="bot"></option>
+                <option value="globe"></option><option value="zap"></option><option value="bell"></option>
+              </datalist>
+            </label>
+          </div>
+          <label class="fld"><span>Título</span><input id="sTitle" placeholder="Minha Pesquisa Custom" /></label>
+          <label class="fld"><span>Descrição</span><input id="sDesc" placeholder="O que ela faz…" /></label>
+          <label class="fld"><span>System prompt da skill</span><textarea id="sPrompt" rows="4" placeholder="Você é um especialista em… Sempre responda em português, com fontes…"></textarea></label>
+          <label class="fld"><span>Ação automática (opcional)</span><input id="sAction" placeholder="noticias: IA  |  youtube: URL  |  abrir: URL" /></label>
+          <div class="btnrow">
+            <button type="submit" class="btn primary sm"><i data-lucide="save"></i>Salvar skill</button>
+            <button type="button" id="btnCancelSkill" class="btn ghost sm">Cancelar</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="tabpage" id="tab-tasks" hidden>
+        <div class="tabhead"><h3>Tarefas com IA</h3><button id="btnNewTask" class="btn primary sm"><i data-lucide="plus"></i>Nova tarefa</button></div>
+        <form id="taskForm">
+          <div class="taskrow">
+            <input id="tText" placeholder="Ex.: pesquisar lançamentos de IA… às 9h me avise" />
+            <button class="btn primary sm" type="submit">Adicionar</button>
+          </div>
+        </form>
+        <div id="taskList"></div>
+      </div>
+
+      <div class="tabpage" id="tab-reminders" hidden>
+        <div class="tabhead"><h3>Lembretes</h3><button id="btnNewReminder" class="btn primary sm"><i data-lucide="plus"></i>Novo</button></div>
+        <p class="hint">Peça no chat: “me lembre às 14:30 de beber água”. Disparam com aviso + voz, mesmo sem IA.</p>
+        <form id="reminderForm" hidden>
+          <div class="grid2">
+            <label class="fld"><span>Hora</span><input id="rmTime" type="time" /></label>
+            <label class="fld"><span>Repetir</span>
+              <select id="rmRepeat"><option value="once">Uma vez</option><option value="daily">Todo dia</option></select>
+            </label>
+          </div>
+          <label class="fld"><span>Aviso</span><input id="rmText" placeholder="Beber água" /></label>
+          <div class="btnrow">
+            <button type="submit" class="btn primary sm"><i data-lucide="save"></i>Salvar</button>
+            <button type="button" id="btnCancelReminder" class="btn ghost sm">Cancelar</button>
+          </div>
+        </form>
+        <div id="reminderList"></div>
+      </div>
+
+      <div class="tabpage" id="tab-music" hidden>
+        <div class="tabhead"><h3>Música livre</h3><span class="pill">CC · grátis</span></div>
+        <p class="hint">Busque em <b>Internet Archive + Wikimedia</b> (sem chave), toque na hora ou baixe o MP3. No chat: <code>toca lofi</code> · <code>baixa jazz pra mim</code> · <code>/musica samba</code></p>
+        <form id="musicForm" onsubmit="return false">
+          <div class="taskrow">
+            <input id="musicSearch" placeholder="Ex.: lofi, jazz, piano, samba, foco…" />
+            <select id="musicSource" title="Fonte" style="max-width:130px;background:var(--input);color:var(--ink);border:1px solid var(--stroke);border-radius:11px;padding:9px;font:500 13px var(--font)">
+              <option value="all">Todas</option>
+              <option value="ia">Archive.org</option>
+              <option value="wiki">Wikimedia</option>
+            </select>
+            <button class="btn primary sm" id="musicGo" type="submit">Buscar</button>
+          </div>
+        </form>
+        <div id="musicResults"></div>
+        <h4 style="font-size:13px;margin:10px 0 6px">Fila de reprodução</h4>
+        <div id="musicQueue"></div>
+        <h4 style="font-size:13px;margin:10px 0 6px">Repositórios gratuitos</h4>
+        <div id="musicRepos"></div>
+      </div>
+
+      <div class="tabpage" id="tab-log" hidden>
+        <div class="tabhead"><h3>Log completo</h3><div class="btnrow"><button id="btnCopyLog" class="btn ghost sm" title="Copiar log filtrado como texto">Copiar</button><button id="btnExportLog" class="btn ghost sm" title="Baixar log + traces em JSON">Exportar</button><button id="btnClearLog" class="btn ghost sm">Limpar</button></div></div>
+        <p class="hint">Tudo que o harness faz: eventos, tools, erros e traces do agente (latência, modelo, verificações).</p>
+        <div class="taskrow"><select id="logFilter" title="Filtrar por nível" style="background:var(--input);color:var(--ink);border:1px solid var(--stroke);border-radius:11px;padding:8px;font:500 12px var(--font)"><option value="all">tudo</option><option value="info">info</option><option value="ok">ok</option><option value="warn">avisos/erros</option></select></div>
+        <div id="execLog"></div>
+        <h4 style="font-size:13px;margin:10px 0 6px">Traces do agente</h4>
+        <div id="traceLog"></div>
+      </div>
+    </aside>
+  </main>
+  <div id="musicBar" class="glass-card" hidden>
+    <button id="mbPrev" class="btn ghost sm icon-only" title="Anterior"><i data-lucide="skip-back"></i></button>
+    <button id="mbPlay" class="btn primary sm icon-only" title="Play/Pause"><i data-lucide="play"></i></button>
+    <button id="mbNext" class="btn ghost sm icon-only" title="Próxima"><i data-lucide="skip-forward"></i></button>
+    <div class="mb-info"><b id="mbTitle">—</b><small id="mbArtist">—</small></div>
+    <input id="mbProg" type="range" min="0" max="100" value="0" title="Progresso" />
+    <span id="mbTime" class="mono"></span>
+    <input id="mbVol" type="range" min="0" max="100" value="100" title="Volume" />
+    <button id="mbDl" class="btn ghost sm icon-only" title="Baixar MP3"><i data-lucide="download"></i></button>
+  </div>
+  <audio id="musicAudio" preload="none"></audio>
+</div>
+
+<!-- ══════════ SANDBOX · monitor ampliado ══════════ -->
+<div id="sandboxOverlay" hidden>
+  <div class="sb-stage glass-card">
+    <div class="sb-bar"><span class="sb-dots"><i></i><i></i><i></i></span><b id="sandboxBigTitle">Nexus</b><button id="sandboxClose" class="btn ghost sm icon-only" title="Fechar"><i data-lucide="x"></i></button></div>
+    <div id="sandboxBig" class="sb-big"></div>
+  </div>
+</div>
+
+<!-- ══════════ NÚCLEO · overlay JARVIS ══════════ -->
+<div id="coreOverlay" hidden>
+  <div class="core-stage">
+    <button id="coreClose" class="btn ghost sm"><i data-lucide="x"></i>Fechar</button>
+    <div class="core-sys"><span id="coreSysTime">--:--</span><span class="sep"></span><span id="coreSysProv">—</span></div>
+    <div id="neuralWrap">
+      <canvas id="neuralCanvas"></canvas>
+      <div class="neural-legend"><span><i style="background:#fff"></i>Núcleo</span><span><i style="background:#42a5ff"></i>Skills</span><span><i style="background:#ff2fb3"></i>Memórias</span></div>
+    </div>
+    <h2 id="coreState">Sistemas nominais</h2>
+    <p id="coreDetail">Núcleo em espera. As ações do harness aparecem aqui em tempo real.</p>
+    <div class="core-bars" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+    <div id="coreWindows"></div>
+    <button id="coreClear" class="btn ghost sm"><i data-lucide="trash-2"></i>Limpar janelas</button>
+  </div>
+</div>
+
+<div id="restOverlay" hidden>
+  <div class="rest-inner">
+    <div class="rest-dot"></div>
+    <div id="restClock">--:--</div>
+    <div id="restDate">—</div>
+    <p class="rest-hint">pressione <kbd>ESPAÇO</kbd> para despertar</p>
+  </div>
+</div>
+
+<div id="toasts"></div>
+
+<div id="voiceBlur" hidden></div>
+<div id="voiceFloat" hidden>
+  <span class="vf-mic"><i data-lucide="mic"></i></span>
+  <canvas id="voiceWave" width="120" height="36"></canvas>
+  <span class="vf-info"><b id="voiceState">Ouvindo…</b><small id="voiceTimer" class="mono">0:00</small></span>
+  <span class="vf-bar"><i id="voiceProg"></i></span>
+</div>
+
+<!-- Modal configurações -->
+<div id="settingsModal" class="modal" hidden>
+  <div class="modal-card glass-card wide">
+    <div class="modal-head">
+      <h3><i data-lucide="settings"></i> Configurações</h3>
+      <button id="settingsClose" class="btn ghost sm icon-only"><i data-lucide="x"></i></button>
+    </div>
+    <div class="setgrid">
+      <section class="set-block">
+        <h2><i data-lucide="cpu"></i> Conexão &amp; Modelo</h2>
+        <label class="fld"><span>Provedor</span>
+          <select id="provider">
+            <option value="groq">Groq · ultra-rápido, grátis</option>
+            <option value="openai">OpenAI</option>
+            <option value="gemini">Google Gemini</option>
+            <option value="anthropic">Anthropic Claude</option>
+            <option value="ollama">Ollama · Local</option>
+            <option value="lmstudio">LM Studio · Local</option>
+            <option value="openrouter">OpenRouter / Compatível</option>
+          </select>
+        </label>
+        <label class="fld"><span>Modelo <button type="button" id="btnModels" class="linkbtn" title="Buscar modelos disponíveis para esta chave"><i data-lucide="refresh-cw"></i>atualizar</button></span>
+          <select id="model"></select>
+        </label>
+        <label class="fld"><span>API Key <em id="keyHint">só no seu navegador</em></span>
+          <div class="keyrow">
+            <input id="apiKey" type="password" placeholder="gsk_… · sk-… · AIza…" autocomplete="off" />
+            <button id="toggleKey" class="btn ghost sm icon-only" title="mostrar/ocultar"><i data-lucide="eye"></i></button>
+          </div>
+        </label>
+        <label class="fld" id="baseUrlWrap" hidden><span>Base URL (custom / Ollama / LM Studio)</span>
+          <input id="baseUrl" type="text" placeholder="http://localhost:11434 · LM Studio: http://localhost:1234/v1" />
+        </label>
+        <div class="sliderow">
+          <div class="fld grow"><span>Temperatura <b id="tempVal">0.7</b></span>
+            <input id="temperature" type="range" min="0" max="2" step="0.1" value="0.7" />
+          </div>
+          <div class="fld grow"><span>Máx tokens <b id="tokVal">2048</b></span>
+            <input id="maxTokens" type="range" min="256" max="8192" step="256" value="2048" />
+          </div>
+        </div>
+        <div class="btnrow">
+          <button id="btnSaveKeys" class="btn primary sm"><i data-lucide="save"></i>Salvar</button>
+          <button id="btnTest" class="btn ghost sm"><i data-lucide="zap"></i>Testar conexão</button>
+        </div>
+        <p class="hint"><i data-lucide="lock"></i> As chaves ficam em <code>localStorage</code>. Nada sai do seu PC exceto chamadas diretas às APIs oficiais. <a href="#" id="linkKeys">Onde conseguir chaves</a></p>
+      </section>
+      <section class="set-block">
+        <h2><i data-lucide="palette"></i> Aparência &amp; Fundo</h2>
+        <label class="fld"><span>Tema</span>
+          <span class="segmented" id="themeSwitch" role="tablist" aria-label="Tema" style="display:flex">
+            <button data-set-theme="light" title="Light"><i data-lucide="sun"></i>Light</button>
+            <button data-set-theme="dark" title="Dark"><i data-lucide="moon"></i>Dark</button>
+            <button data-set-theme="glass" class="active" title="Glass translúcido"><i data-lucide="sparkles"></i>Glass</button>
+          </span>
+        </label>
+        <label class="fld"><span>Plano de fundo</span>
+          <select id="bgSelect">
+            <option value="combo">Núcleo 3D + Aurora</option>
+            <option value="3d">Só Núcleo 3D</option>
+            <option value="aurora">Só Aurora</option>
+            <option value="custom">Imagem personalizada</option>
+            <option value="none">Nenhum (liso)</option>
+          </select>
+        </label>
+        <label class="fld" id="bgUploadWrap" hidden><span>Enviar imagem</span>
+          <input id="bgUpload" type="file" accept="image/*" />
+        </label>
+        <div class="fld"><span>Galeria (toque para aplicar)</span>
+          <div id="bgPresets" class="presets"></div>
+        </div>
+        <div class="fld"><span>Desfoque do fundo <b id="bgBlurVal">6px</b></span>
+          <input id="bgBlur" type="range" min="0" max="24" value="6" />
+        </div>
+        <label class="fld"><span>Tela de descanso</span>
+          <select id="restMinutes">
+            <option value="0">Desligada</option>
+            <option value="1">Após 1 min parado</option>
+            <option value="3">Após 3 min parado</option>
+            <option value="5" selected>Após 5 min parado</option>
+            <option value="10">Após 10 min parado</option>
+          </select>
+        </label>
+        <div class="fld"><span>Intensidade 3D <b id="fxVal">70%</b></span>
+          <input id="fxIntensity" type="range" min="0" max="100" value="70" />
+        </div>
+        <div class="btnrow">
+          <button id="btnFxToggle" class="btn ghost sm"><i data-lucide="pause"></i>Pausar fundo</button>
+        </div>
+      </section>
+      <section class="set-block">
+        <h2><i data-lucide="database"></i> Meus dados</h2>
+        <p class="hint" style="margin-top:0">Backup de provedores, rotinas, skills e tarefas em JSON.</p>
+        <div class="btnrow">
+          <button id="btnExport" class="btn ghost sm"><i data-lucide="download"></i>Exportar</button>
+          <button id="btnImport" class="btn ghost sm"><i data-lucide="upload"></i>Importar</button>
+          <input type="file" id="importFile" accept="application/json" hidden />
+        </div>
+        <div class="fld" style="margin-top:10px"><span>Pasta de trabalho (arquivos)</span>
+          <div class="btnrow">
+            <button id="btnWorkDir" class="btn ghost sm"><i data-lucide="folder"></i>Autorizar pasta</button>
+          </div>
+          <p class="hint" id="workDirLabel">Nenhuma pasta autorizada.</p>
+        </div>
+      </section>
+      <section class="set-block">
+        <h2><i data-lucide="code"></i> Coding Agent</h2>
+        <label class="fld"><span>Modo</span>
+          <span class="segmented" id="codeModeSwitch" role="tablist" aria-label="Modo" style="display:flex">
+            <button data-code-mode="plan" title="Só leitura + planejamento"><i data-lucide="eye"></i>Plan</button>
+            <button data-code-mode="build" title="Permite escrita conforme permissões"><i data-lucide="hammer"></i>Build</button>
+          </span>
+        </label>
+        <label class="fld"><span>Workspace (pasta do projeto)</span>
+          <div class="btnrow">
+            <button id="btnCodeWorkDir" class="btn ghost sm"><i data-lucide="folder"></i>Autorizar pasta</button>
+          </div>
+          <p class="hint" id="codeWorkDirLabel">Usa a mesma pasta autorizada acima.</p>
+        </label>
+        <div class="fld"><span>Permissões por ferramenta</span>
+          <div id="codePerms"></div>
+        </div>
+        <div class="grid2">
+          <label class="fld"><span>Bridge URL (shell local)</span><input id="codeBridgeUrl" type="text" placeholder="http://127.0.0.1:8787" /></label>
+          <label class="fld"><span>Bridge token</span><input id="codeBridgeToken" type="password" placeholder="impresso pelo bridge.py" autocomplete="off" /></label>
+        </div>
+        <div class="btnrow">
+          <button id="btnCodeBridgeTest" class="btn ghost sm"><i data-lucide="zap"></i>Testar bridge</button>
+          <button id="btnCodeUndo" class="btn ghost sm"><i data-lucide="undo-2"></i>Desfazer <b id="codeUndoCount" class="pill">0</b></button>
+        </div>
+        <p class="hint"><i data-lucide="lock"></i> Escrita restrita à pasta autorizada. Sem bridge, shell é negado. Rode <code>python3 bridge.py</code> na pasta do projeto p/ liberar shell local.</p>
+      </section>
+    </div>
+  </div>
+</div>
+
+<!-- Modal genérico (confirmações e entradas) -->
+<div id="uiModal" class="modal" hidden>
+  <div class="modal-card glass-card mini">
+    <h3 id="uiTitle">Confirmar</h3>
+    <p id="uiMsg" class="hint"></p>
+    <input id="uiInput" hidden />
+    <textarea id="uiArea" hidden rows="4"></textarea>
+    <div class="btnrow ui-actions">
+      <button id="uiCancel" class="btn ghost sm">Cancelar</button>
+      <button id="uiOk" class="btn primary sm">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal chaves -->
+<div id="keysModal" class="modal" hidden>
+  <div class="modal-card glass-card">
+    <h3><i data-lucide="key-round"></i> Onde conseguir suas chaves</h3>
+    <ul>
+      <li><b>Groq (grátis e rapidíssima):</b> <code>console.groq.com → API Keys → Create</code></li>
+      <li><b>OpenAI:</b> <code>platform.openai.com → API keys</code></li>
+      <li><b>Gemini:</b> <code>aistudio.google.com → Get API key</code></li>
+      <li><b>Anthropic:</b> <code>console.anthropic.com → API keys</code></li>
+      <li><b>Ollama local (sem chave):</b> instale <code>ollama</code> e rode <code>ollama serve</code></li>
+      <li><b>LM Studio local (sem chave):</b> abra o LM Studio → aba Server → <code>Start Server</code> em <code>http://localhost:1234</code></li>
+    </ul>
+    <button class="btn primary sm" id="keysClose">Entendi</button>
+  </div>
+</div>
+
+<script src="js/skills.js"></script>
+<script src="js/music-repos.js"></script>
+<script src="js/local-music.js"></script>
+<script src="js/music-player.js"></script>
+<script type="module" src="js/three-bg.js"></script>
+<script type="module" src="js/neural.js"></script>
+<script type="module" src="js/v2-bridge.js"></script>
+<script src="js/code-agent.js"></script>
+<script src="js/sandbox.js"></script>
+<script src="js/app.js"></script>
+<script src="js/clockwx.js"></script>
+<script src="js/voice.js"></script>
+<script>if(/[\?&]eval=1/.test(location.search)){var s=document.createElement('script');s.src='eval/browser-eval.js';s.onload=function(){var i=setInterval(function(){if(window.runBrowserEval){clearInterval(i);setTimeout(window.runBrowserEval,1500)}},300)};document.body.appendChild(s);}</script>
+</body>
+</html>

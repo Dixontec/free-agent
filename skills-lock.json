@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "web-search": {
+      "source": "code-yeongyu/ultimate-web-search-skill",
+      "sourceType": "github",
+      "skillPath": "SKILL.md",
+      "computedHash": "90308f713ae22746bdd651353f1b11c670b9bcc9c9edb9fdaa31aeb137c25ea5"
+    }
+  }
+}
