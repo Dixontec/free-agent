@@ -49,6 +49,12 @@ export function assertTaskComplete(userText, answer, ctx) {
     news: /not[ií]cia/.test(t),
     routine: /rotina/.test(t),
     createTask: /tarefa/i.test(t) && /(cri|adicion|nova)/i.test(t),
+    completeTask: /tarefa/i.test(t) && /(conclu|finaliz|termin|marcar.*(feito|conclu)|cumpriu|fez a tarefa|deu.*pronto)/i.test(t) && !/(cri|adicion|nova)/i.test(t),
+    deleteTask: /tarefa/i.test(t) && /(delet|apag|remov|exclu)/i.test(t) && !/(cri|adicion|nova)/i.test(t),
+    createNote: /\bnota/i.test(t) && /(cri|anote|anotar|adicion|salve|salvar|nova)/i.test(t) && !/(edit|atualiz|delet|apag|remov|exclu)/i.test(t),
+    listNotes: /nota/i.test(t) && /lista|mostra|minhas?\s+nota|tem.{0,20}nota|alguma\s+nota/i.test(t) && !/(cri|anote|edit|delet|apag)/i.test(t),
+    editNote: /nota/i.test(t) && /(edit|atualiz|mudar|alter)/i.test(t),
+    deleteNote: /nota/i.test(t) && /(delet|apag|remov|exclu)/i.test(t),
     listTasks: /tem.+tarefa|tenho.+tarefa|alguma tarefa|tarefa pendente|o que.*pendente|lista.*tarefa|mostra.*tarefa/i.test(t),
   };
   const used = new Set((ctx.toolsUsed || []).map(x => String(x).toLowerCase()));
@@ -60,6 +66,18 @@ export function assertTaskComplete(userText, answer, ctx) {
     pend.push({ check: 'tarefa-baixar', reason: 'pediu baixar mas nenhum download foi iniciado', fix: 'use music_download e confirme o arquivo antes de responder' });
   if (wants.createTask && !used.has('create_task'))
     pend.push({ check: 'tarefa-criar', reason: 'pediu criar tarefa mas nenhuma foi salva', fix: 'use create_task com o texto da tarefa antes de responder' });
+  if (wants.completeTask && !used.has('complete_task'))
+    pend.push({ check: 'tarefa-concluir', reason: 'pediu concluir tarefa mas complete_task não executou', fix: 'use complete_task com o texto da tarefa antes de responder' });
+  if (wants.deleteTask && !used.has('delete_task'))
+    pend.push({ check: 'tarefa-deletar', reason: 'pediu deletar tarefa mas delete_task não executou', fix: 'use delete_task com o texto da tarefa antes de responder' });
+  if (wants.createNote && !used.has('create_note'))
+    pend.push({ check: 'nota-criar', reason: 'pediu criar nota mas create_note não executou', fix: 'use create_note com o conteúdo antes de responder' });
+  if (wants.listNotes && !used.has('list_notes') && !/nenhuma nota/i.test(a))
+    pend.push({ check: 'nota-ler', reason: 'perguntou de notas mas não leu a lista real', fix: 'use list_notes e responda SÓ com os dados retornados' });
+  if (wants.editNote && !used.has('edit_note'))
+    pend.push({ check: 'nota-editar', reason: 'pediu editar nota mas edit_note não executou', fix: 'use edit_note com match e novo texto antes de responder' });
+  if (wants.deleteNote && !used.has('delete_note'))
+    pend.push({ check: 'nota-deletar', reason: 'pediu deletar nota mas delete_note não executou', fix: 'use delete_note com o trecho da nota antes de responder' });
   if (wants.listTasks && !used.has('list_tasks') && !/nenhuma tarefa|pendente\(s\)|tudo em dia/i.test(a))
     pend.push({ check: 'tarefa-ler', reason: 'perguntou de tarefas mas não leu a lista real', fix: 'use list_tasks e responda SÓ com os dados retornados' });
   if (wants.open && !used.has('open_site'))

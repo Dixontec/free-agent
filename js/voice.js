@@ -10,17 +10,23 @@
   const S = { state: 'idle', rec: null, chunks: [], stream: null, t0: 0, timer: null, transcriber: null, modelLoading: null, ac: null, analyser: null, raf: 0, cancelled: false };
 
   function icons() { try { window.lucide && lucide.createIcons(); } catch {} }
+  let pillT = null;
   function showPill(label) {
+    clearTimeout(pillT);
     const f = $('#voiceFloat'), b = $('#voiceBlur');
-    if (f) f.hidden = false;
+    if (f) { f.hidden = false; requestAnimationFrame(() => requestAnimationFrame(() => f.classList.add('show'))); }
     if (b) b.hidden = false;
     if (label) { const st = $('#voiceState'); if (st) st.textContent = label; }
     const btn = $('#btnVoice'); if (btn) btn.classList.add('live');
     icons();
   }
   function hidePill() {
+    clearTimeout(pillT);
     const f = $('#voiceFloat'), b = $('#voiceBlur');
-    if (f) f.hidden = true;
+    if (f) {
+      f.classList.remove('show');
+      pillT = setTimeout(() => { if (f && !f.classList.contains('show')) f.hidden = true; }, 200);
+    }
     if (b) b.hidden = true;
     const btn = $('#btnVoice'); if (btn) btn.classList.remove('live');
   }

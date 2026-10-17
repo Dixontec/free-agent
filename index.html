@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>My OS · AI Harness</title>
+<title>My OS · AI Agent</title>
 <meta name="description" content="My OS — harness premium para orquestrar Groq, OpenAI, Gemini, rotinas, tarefas e skills." />
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%230071e3'/%3E%3Cstop offset='.6' stop-color='%237d2aff'/%3E%3Cstop offset='1' stop-color='%23ff2fb3'/%3E%3C/linearGradient%3E%3C/defs%3E%3Ccircle cx='16' cy='16' r='13' fill='none' stroke='url(%23g)' stroke-width='2.5'/%3E%3Ccircle cx='16' cy='16' r='5' fill='url(%23g)'/%3E%3C/svg%3E" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -25,7 +25,7 @@
   <!-- ══════════ TOPBAR ══════════ -->
   <header id="topbar" class="glass-card">
     <button class="brand" id="brandCore" title="Abrir o Núcleo">
-      <span class="wordmark"><b>MY OS</b><small>AI HARNESS</small></span>
+      <span class="wordmark"><b>FREE</b><small>AGENT</small></span>
     </button>
     <div class="top-center"></div>
     <div class="top-right">
@@ -118,23 +118,9 @@
         <div class="core-row">
         <button id="coreMini" class="core-mini" title="Abrir o Núcleo">
           <span class="cm-pulse" id="cmDot"></span>
-          <span class="cm-text"><b id="coreStatus">Sistemas nominais</b><small id="coreSub">Núcleo em espera · clique para expandir</small></span>
-          <span class="cm-mood" id="moodLabel">ocioso</span>
+          <span class="cm-text"><b id="coreStatus">Olá</b><small id="coreSub">dia tranquilo por aqui — se precisar de algo, é só falar.</small></span>
         </button>
-        <button id="btnQuickNew" class="btn ghost sm" title="Nova conversa"><i data-lucide="plus"></i>Nova</button>
-        </div>
-        <div class="chips" id="quickChips">
-          <button data-prompt="Faça uma pesquisa na web sobre: inteligência artificial hoje, e me traga um resumo com fontes."><i data-lucide="search"></i>Pesquisar web</button>
-          <button data-prompt="Me traga as principais notícias de tecnologia de hoje em tópicos curtos em português."><i data-lucide="newspaper"></i>Notícias de hoje</button>
-          <button data-prompt="Crie uma rotina da manhã para as 08:00 que toca minha música, mostra notícias e abre meus apps."><i data-lucide="alarm-clock"></i>Rotina 08:00</button>
-          <button id="btnAddChip" class="chip-add" title="Adicionar botão personalizado"><i data-lucide="plus"></i></button>
-        </div>
-        <div id="chipForm" hidden>
-          <input id="chipLabel" maxlength="24" placeholder="Nome do botão · ex.: Roteiro YT" />
-          <input id="chipPrompt" placeholder="Prompt enviado à IA ao clicar…" />
-          <button id="chipSave" class="btn primary sm">Salvar</button>
-          <button id="chipCancel" class="btn ghost sm">Cancelar</button>
-          <div id="chipManage"></div>
+        <button id="btnQuickNew" class="btn ghost sm" title="Nova conversa"><i data-lucide="plus"></i>Nova conversa</button>
         </div>
       </div>
       <div id="messages"></div>
@@ -145,14 +131,31 @@
       </div>
       <div id="composerBar">
         <span class="cb-prov" id="quickProv"><i data-lucide="cpu"></i><b>—</b></span>
-        <select id="modelQuick" title="Modelo em uso"></select>
+        <div class="mq-wrap">
+          <button type="button" id="modelQuickBtn" class="mq-btn">—</button>
+          <div id="modelQuickPop" hidden></div>
+        </div>
         <button id="btnModelsQuick" class="btn ghost sm icon-only" title="Atualizar modelos da API"><i data-lucide="refresh-cw"></i></button>
       </div>
       <div id="ctxBar" title="Uso de contexto do modelo atual · clique para zerar"><span id="ctxLabel">—</span><div class="ctx-track"><i id="ctxFill"></i></div></div>
       <form id="composer">
-        <button type="button" id="btnAttach" class="btn ghost icon-only" title="Anexar texto como contexto"><i data-lucide="paperclip"></i></button>
-        <button type="button" id="btnVoice" class="btn ghost icon-only" title="Falar (Ctrl+Espaço)"><i data-lucide="mic"></i></button>
-        <textarea id="input" rows="1" placeholder="Pergunte, peça pesquisa, notícia, rotina…  (Enter envia · Shift+Enter quebra)"></textarea>
+        <div class="attach-wrap">
+          <button type="button" id="btnAttach" class="btn ghost icon-only"><i data-lucide="paperclip"></i></button>
+          <div id="attachMenu" hidden>
+            <button type="button" data-act="folder">Anexar pasta de contexto</button>
+            <button type="button" data-act="file">Anexar arquivo · áudio, vídeo ou texto</button>
+          </div>
+          <input type="file" id="attachFileInput" accept="audio/*,video/*,text/*,.txt,.md,.json,.csv,.js,.ts,.tsx,.jsx,.html,.css,.py,.yml,.yaml,.xml,.log,.srt,.sh,.sql,.rs,.go,.java,.c,.cpp,.rb,.php" hidden />
+          <input type="file" id="attachDirInput" webkitdirectory directory multiple hidden />
+        </div>
+        <div class="voice-wrap">
+          <button type="button" id="btnVoice" class="btn ghost icon-only"><i data-lucide="mic"></i></button>
+          <div id="voiceTip" hidden>Falar · Ctrl+Espaço</div>
+        </div>
+        <div class="ci-wrap">
+          <div id="skillMentionPop" hidden></div>
+          <textarea id="input" rows="1" placeholder="Pergunte, peça pesquisa, rotina…  @slug invoca uma skill  ·  Enter envia · Shift+Enter quebra"></textarea>
+        </div>
         <button type="submit" id="btnSend" class="btn primary icon-only" title="Enviar"><i data-lucide="send"></i></button>
       </form>
     </section>
@@ -174,6 +177,9 @@
         <button data-tab="tasks"><i data-lucide="list-checks"></i>Tarefas</button>
         <button data-tab="reminders"><i data-lucide="bell"></i>Lembretes</button>
         <button data-tab="log"><i data-lucide="terminal"></i>Log</button>
+        <button data-tab="notes"><i data-lucide="sticky-note"></i>Notas</button>
+        <button data-tab="extra1"><i data-lucide="rocket"></i></button>
+        <button data-tab="extra2"><i data-lucide="zap"></i></button>
       </nav>
 
       <div class="tabpage" id="tab-routines">
@@ -207,7 +213,7 @@
 
       <div class="tabpage" id="tab-skills" hidden>
         <div class="tabhead"><h3>Catálogo de Skills</h3><button id="btnNewSkill" class="btn primary sm"><i data-lucide="plus"></i>Nova skill</button></div>
-        <p class="hint">Skills são capacidades plugáveis que a IA pode invocar. Edite, ative/desative ou crie as suas.</p>
+        <p class="hint">Skills são capacidades plugáveis que a IA pode invocar. Edite, ative/desative ou crie as suas — no chat, use <code>@slug-da-skill</code> p/ invocar direto.</p>
         <div id="skillList"></div>
         <form id="skillForm" hidden>
           <h4 id="skillFormTitle">Nova skill</h4>
@@ -292,6 +298,21 @@
         <h4 style="font-size:13px;margin:10px 0 6px">Traces do agente</h4>
         <div id="traceLog"></div>
       </div>
+      <div class="tabpage" id="tab-notes" hidden>
+        <div class="tabhead"><h3>Notas</h3><button id="btnNewNote" class="btn primary sm"><i data-lucide="plus"></i>Nova nota</button></div>
+        <form id="noteForm" hidden>
+          <h4 id="noteFormTitle">Nova nota</h4>
+          <label class="fld"><span>Título</span><input id="nTitle" placeholder="Título da nota" /></label>
+          <label class="fld"><span>Texto</span><textarea id="nText" rows="4" placeholder="Escreva sua nota…"></textarea></label>
+          <div class="btnrow">
+            <button type="submit" class="btn primary sm"><i data-lucide="save"></i>Salvar nota</button>
+            <button type="button" id="btnCancelNote" class="btn ghost sm">Cancelar</button>
+          </div>
+        </form>
+        <div id="noteList"></div>
+      </div>
+      <div class="tabpage" id="tab-extra1" hidden></div>
+      <div class="tabpage" id="tab-extra2" hidden></div>
     </aside>
   </main>
   <div id="musicBar" class="glass-card" hidden>
@@ -484,6 +505,18 @@
         <p class="hint"><i data-lucide="lock"></i> Escrita restrita à pasta autorizada. Sem bridge, shell é negado. Rode <code>python3 bridge.py</code> na pasta do projeto p/ liberar shell local.</p>
       </section>
     </div>
+  </div>
+</div>
+
+<!-- Modal nota (visualização) -->
+<div id="noteModal" class="modal" hidden>
+  <div class="modal-card glass-card">
+    <div class="modal-head">
+      <h3 id="noteModalTitle">Nota</h3>
+      <button id="noteModalClose" class="btn ghost sm icon-only"><i data-lucide="x"></i></button>
+    </div>
+    <div id="noteModalBody" class="note-full"></div>
+    <div id="noteModalMeta" class="note-meta"></div>
   </div>
 </div>
 

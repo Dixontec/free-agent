@@ -96,6 +96,42 @@ export const TOOLS = {
     needsApproval: false,
     renderHint: () => `<tool name="list_tasks"></tool>`,
   },
+  complete_task: {
+    desc: 'Concluir/marcar tarefa como feita na aba Tarefas. Use quando pedir concluir/fazer/terminar tarefa.',
+    schema: { type: 'object', properties: { text: { type: 'string', maxLength: 200 } }, required: ['text'] },
+    needsApproval: false,
+    renderHint: () => `<tool name="complete_task">texto (ou parte) da tarefa</tool>`,
+  },
+  delete_task: {
+    desc: 'Deletar/remover tarefa da aba Tarefas. Use quando pedir deletar/apagar/remover tarefa.',
+    schema: { type: 'object', properties: { text: { type: 'string', maxLength: 200 } }, required: ['text'] },
+    needsApproval: false,
+    renderHint: () => `<tool name="delete_task">texto (ou parte) da tarefa</tool>`,
+  },
+  create_note: {
+    desc: 'Criar nota na aba Notas. Use quando pedir criar/anotar/anote nota.',
+    schema: { type: 'object', properties: { title: { type: 'string', maxLength: 120 }, text: { type: 'string', maxLength: 4000 } }, required: ['text'] },
+    needsApproval: false,
+    renderHint: () => `<tool name="create_note">{"title":"Título","text":"conteúdo"}</tool>`,
+  },
+  list_notes: {
+    desc: 'Ler notas salvas. Use quando perguntar se tem nota/minhas notas.',
+    schema: { type: 'object', properties: {} },
+    needsApproval: false,
+    renderHint: () => `<tool name="list_notes"></tool>`,
+  },
+  edit_note: {
+    desc: 'Editar nota existente (por trecho do texto/título ou nº). Use quando pedir editar/atualizar nota.',
+    schema: { type: 'object', properties: { match: { type: 'string', maxLength: 200 }, text: { type: 'string', maxLength: 4000 } }, required: ['match', 'text'] },
+    needsApproval: false,
+    renderHint: () => `<tool name="edit_note">{"match":"trecho da nota","text":"novo conteúdo"}</tool>`,
+  },
+  delete_note: {
+    desc: 'Deletar nota da aba Notas. Use quando pedir deletar/apagar/remover nota.',
+    schema: { type: 'object', properties: { match: { type: 'string', maxLength: 200 } }, required: ['match'] },
+    needsApproval: false,
+    renderHint: () => `<tool name="delete_note">trecho da nota ou nº</tool>`,
+  },
 };
 
 // System enxuto: nomes + 1 linha cada + slugs (sem prompts das skills)
@@ -109,6 +145,12 @@ export function buildToolsSection(activeSlugs) {
     `- music_download(q): baixar MP3 gratuito.`,
     `- create_task(texto): criar tarefa na aba Tarefas.`,
     `- list_tasks: ler tarefas (use ao perguntar pendências).`,
+    `- complete_task(texto): concluir/marcar tarefa como feita.`,
+    `- delete_task(texto): deletar/remover tarefa.`,
+    `- create_note({"title","text"}): criar nota na aba Notas.`,
+    `- list_notes: ler notas (use ao perguntar minhas notas).`,
+    `- edit_note({"match","text"}): editar nota por trecho/nº.`,
+    `- delete_note(match): deletar nota por trecho/nº.`,
     `- code_read({"path"}): ler arquivo do projeto.`,
     `- code_list({"path"}): listar pasta.`,
     `- code_glob({"pattern"}): achar arquivos.`,
@@ -122,7 +164,7 @@ export function buildToolsSection(activeSlugs) {
 
 export function parseToolCall(text) {
   const s = String(text || '');
-  const m = s.match(/<tool\s+name=["'](web_search|web_open|open_site|run_skill|music_search|music_download|music_play|create_task|list_tasks|news|code_read|code_list|code_glob|code_grep|code_write|code_edit|code_bash)["']\s*>([\s\S]*?)<\/tool>/i);
+  const m = s.match(/<tool\s+name=["'](web_search|web_open|open_site|run_skill|music_search|music_download|music_play|create_task|list_tasks|complete_task|delete_task|create_note|list_notes|edit_note|delete_note|news|code_read|code_list|code_glob|code_grep|code_write|code_edit|code_bash)["']\s*>([\s\S]*?)<\/tool>/i);
   if (m) {
     let name = m[1].toLowerCase();
     if (name === 'news') name = 'web_search'; // compat legado

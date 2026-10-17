@@ -95,7 +95,7 @@ export async function runReAct(userText, deps) {
 
   // executor único de tools (caminho normal + correções que agem)
   // Gate anti-tool-desnecessária: web/open só executa se pedido exigir; senão ignora e responde direto.
-  const NEEDS_RE = /not[ií]cia|pesquis|busc|atual|hoje|recente|2024|2025|2026|abrir|acess|ver\s+site|youtube|v[ií]deo|tarefa|pendente|toca|toque|play|m[uú]sica|baixar|download|skill|rotina|pre[çc]o|clima|dado|fonte|link/i;
+  const NEEDS_RE = /not[ií]cia|\bnota|pesquis|busc|atual|hoje|recente|2024|2025|2026|abrir|acess|ver\s+site|youtube|v[ií]deo|tarefa|pendente|toca|toque|play|m[uú]sica|baixar|download|skill|rotina|pre[çc]o|clima|dado|fonte|link/i;
   const needsToolFor = (t) => NEEDS_RE.test(String(userText || '')) || toolOutputs.length > 0;
   async function runToolCall(tool, step) {
     if ((tool.name === 'web_search' || tool.name === 'web_open') && !needsToolFor()) {

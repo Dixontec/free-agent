@@ -58,9 +58,11 @@ function updateBadge() {
   b.hidden = unseenWins === 0;
   b.textContent = unseenWins > 9 ? '9+' : unseenWins;
 }
+/* saudação do dia (header) */
+let greetLead = '', greetSub = '';
 function setCoreState(label, detail) {
   $('#coreStatus').textContent = label;
-  $('#coreSub').textContent = detail || 'Núcleo em espera · clique para expandir';
+  $('#coreSub').textContent = detail || greetSub || '…';
   $('#coreState').textContent = label;
   if (detail) $('#coreDetail').textContent = detail;
 }
@@ -77,7 +79,7 @@ function coreIdle(detail) {
   if (busyCount === 0) {
     if (window.__neuralSet) window.__neuralSet(false);
     $('#coreMini').classList.remove('busy');
-    setCoreState('Sistemas nominais', detail || 'Núcleo em espera · clique para expandir');
+    setCoreState(greetLead || 'Olá', detail || greetSub || '…');
     setMood('idle');
   }
   paintConvBusy();
@@ -127,6 +129,76 @@ const cfg = Object.assign({ provider: 'groq', model: 'llama-3.3-70b-versatile', 
   store.get('cfg', {}));
 const keys = Object.assign({ groq: '', openai: '', gemini: '', anthropic: '', openrouter: '', ollama: '', lmstudio: '' }, store.get('keys', {}));
 
+/* ── SELETOR RÁPIDO DE MODELO (dropdown custom no chat) ── */
+let mqList = [];
+function mqRender() {
+  const btn = $('#modelQuickBtn'), pop = $('#modelQuickPop');
+  if (!btn || !pop) return;
+  btn.textContent = cfg.model || '—';
+  btn.title = cfg.model || 'Modelo em uso';
+  const items = [...mqList, '__custom'];
+  pop.innerHTML = items.map(m => {
+    const v = m === '__custom' ? '__custom' : String(m);
+    const label = m === '__custom' ? 'Personalizado…' : escapeHtml(v);
+    return `<button type="button" class="mq-item${v === cfg.model ? ' sel' : ''}${m === '__custom' ? ' custom' : ''}" data-m="${escapeHtml(v)}">${label}</button>`;
+  }).join('');
+  $$('#modelQuickPop .mq-item').forEach(b => b.onmousedown = e => { e.preventDefault(); mqPick(b.dataset.m); });
+}
+function mqSetList(list) { mqList = [...new Set(list || [])]; mqRender(); }
+function mqPick(v) {
+  mqCloseNow();
+  if (v === '__custom') {
+    (async () => {
+      const nv = (await uiPrompt('Modelo personalizado', cfg.model, 'ex.: llama-3.3-70b-versatile')) || cfg.model;
+      const _all = store.get('customModels', {}); const _p = $('#provider').value;
+      _all[_p] = [...new Set([...(_all[_p] || []), nv])]; store.set('customModels', _all);
+      refreshModels();
+      cfg.model = nv; store.set('cfg', cfg);
+      if ([...$('#model').options].some(o => o.value === nv)) $('#model').value = nv;
+      updateConn(); mqRender();
+    })();
+    return;
+  }
+  cfg.model = v; store.set('cfg', cfg);
+  if ([...$('#model').options].some(o => o.value === v)) $('#model').value = v;
+  updateConn(); mqRender();
+}
+let mqT1 = null;
+function mqOpen() {
+  clearTimeout(mqT1);
+  const pop = $('#modelQuickPop'); if (!pop) return;
+  pop.hidden = false;
+  requestAnimationFrame(() => requestAnimationFrame(() => pop.classList.add('show')));
+}
+function mqCloseNow() {
+  clearTimeout(mqT1);
+  const pop = $('#modelQuickPop'); if (!pop) return;
+  pop.classList.remove('show'); pop.hidden = true;
+}
+try {
+  const mqWrap = $('.mq-wrap');
+  if (mqWrap) {
+    $('#modelQuickBtn').onclick = e => {
+      e.stopPropagation();
+      const pop = $('#modelQuickPop');
+      if (!pop || pop.hidden) { mqRender(); mqOpen(); } else mqCloseNow();
+    };
+    mqWrap.addEventListener('mouseleave', () => { clearTimeout(mqT1); mqT1 = setTimeout(mqCloseNow, 220); });
+    mqWrap.addEventListener('mouseenter', () => clearTimeout(mqT1));
+    document.addEventListener('click', e => { if (!mqWrap.contains(e.target)) mqCloseNow(); });
+    document.addEventListener('keydown', e => {
+      const pop = $('#modelQuickPop'), btn = $('#modelQuickBtn');
+      if (!pop || pop.hidden || !btn || document.activeElement !== btn) return;
+      const items = $$('#modelQuickPop .mq-item');
+      if (!items.length) return;
+      let ix = items.findIndex(b => b.classList.contains('sel'));
+      if (e.key === 'Escape') { e.preventDefault(); mqCloseNow(); return; }
+      if (e.key === 'ArrowDown') { e.preventDefault(); ix = (ix + 1) % items.length; items.forEach((b, i) => b.classList.toggle('sel', i === ix)); items[ix].scrollIntoView({ block: 'nearest' }); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); ix = (ix - 1 + items.length) % items.length; items.forEach((b, i) => b.classList.toggle('sel', i === ix)); items[ix].scrollIntoView({ block: 'nearest' }); }
+      else if (e.key === 'Enter') { e.preventDefault(); if (ix >= 0) mqPick(items[ix].dataset.m); }
+    });
+  }
+} catch {}
 function refreshModels() {
   const p = $('#provider').value;
   const custom = (store.get('customModels', {}))[p] || [];
@@ -134,8 +206,7 @@ function refreshModels() {
   const opts = list.map(m => `<option>${m}</option>`).join('') + `<option value="__custom">Personalizado…</option>`;
   $('#model').innerHTML = opts;
   if (list.includes(cfg.model)) $('#model').value = cfg.model;
-  const q = $('#modelQuick');
-  if (q) { q.innerHTML = opts; if (list.includes(cfg.model)) q.value = cfg.model; }
+  mqSetList(list);
   $('#baseUrlWrap').hidden = !(p === 'ollama' || p === 'openrouter' || p === 'lmstudio');
   if (p === 'ollama' && !$('#baseUrl').value) $('#baseUrl').value = cfg.baseUrl || 'http://localhost:11434';
   if (p === 'lmstudio' && !$('#baseUrl').value) $('#baseUrl').value = cfg.baseUrl || 'http://localhost:1234/v1';
@@ -241,9 +312,9 @@ async function callLLM(messages, opts = {}) {
   // OpenAI-compatível: OpenAI, Groq, OpenRouter
   // Blindagem Groq 400 tool_use_failed: declara tools nativas p/ chamada nunca falhar,
   // + gate needsTool evita puxar tool sem necessidade.
-  const NEEDS_TOOL_RE = /not[ií]cia|pesquis|busc|atual|hoje|recente|2024|2025|2026|abrir|acess|ver\s+site|youtube|v[ií]deo|tarefa|pendente|toca|toque|play|m[uú]sica|baixar|download|skill|rotina|pre[çc]o|clima|dado|fonte|link/i;
+  const NEEDS_TOOL_RE = /not[ií]cia|\bnota|pesquis|busc|atual|hoje|recente|2024|2025|2026|abrir|acess|ver\s+site|youtube|v[ií]deo|tarefa|pendente|toca|toque|play|m[uú]sica|baixar|download|skill|rotina|pre[çc]o|clima|dado|fonte|link/i;
   const lastUser = [...messages].reverse().find(m => m.role === 'user')?.content || '';
-  const needsTool = NEEDS_TOOL_RE.test(lastUser) || /<tool\s+name=|\[RESULTADO/i.test(messages.map(m => m.content).join('\n').slice(-2000));
+  const needsTool = !opts.noTools && (NEEDS_TOOL_RE.test(lastUser) || /<tool\s+name=|\[RESULTADO/i.test(messages.map(m => m.content).join('\n').slice(-2000)));
   const NATIVE_TOOLS = [
     { type: 'function', function: { name: 'web_search', description: 'Buscar fato atual/externo', parameters: { type: 'object', properties: { query: { type: 'string' } }, required: [] } } },
     { type: 'function', function: { name: 'web_open', description: 'Ler 1 pagina https', parameters: { type: 'object', properties: { url: { type: 'string' } }, required: [] } } },
@@ -452,14 +523,80 @@ function renderHistory() {
 }
 loadConv(store.get('activeConv', null)); updateConn();
 
-$('#input').addEventListener('input', e => { e.target.style.height = 'auto'; e.target.style.height = Math.min(140, e.target.scrollHeight) + 'px'; });
+$('#input').addEventListener('input', e => { e.target.style.height = 'auto'; e.target.style.height = Math.min(140, e.target.scrollHeight) + 'px'; smpUpdate(); });
 $('#input').addEventListener('keydown', e => {
+  if (smp.open && smp.items.length) {
+    if (e.key === 'ArrowDown') { e.preventDefault(); smp.sel = (smp.sel + 1) % smp.items.length; smpRender(); return; }
+    if (e.key === 'ArrowUp') { e.preventDefault(); smp.sel = (smp.sel - 1 + smp.items.length) % smp.items.length; smpRender(); return; }
+    if ((e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey) || e.key === 'Tab') { e.preventDefault(); smpPick(smp.sel); return; }
+    if (e.key === 'Escape') { e.preventDefault(); smpClose(); return; }
+  }
   if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey) { e.preventDefault(); $('#composer').requestSubmit(); }
 });
+$('#input').addEventListener('blur', () => smpClose());
+$('#composer').addEventListener('submit', () => smpClose());
+/* ───────── @MENTION DE SKILLS (autocomplete no chat) ───────── */
+const smp = { items: [], sel: 0, open: false, atIdx: -1 };
+function smpToken(value, caret) {
+  const before = value.slice(0, caret);
+  const m = before.match(/(^|\s)@([a-z0-9-]*)$/i);
+  if (!m) return null;
+  return { at: caret - m[0].length + m[1].length, q: m[2].toLowerCase() };
+}
+function smpFilter(q) {
+  const act = getSkills().filter(s => s.active);
+  if (!q) return act.slice(0, 8);
+  return act.filter(s => s.slug.includes(q) || s.title.toLowerCase().includes(q)).slice(0, 8);
+}
+function smpRender() {
+  const pop = $('#skillMentionPop');
+  if (!pop) return;
+  if (!smp.items.length) { smpClose(); return; }
+  pop.innerHTML = smp.items.map((s, i) =>
+    `<div class="smp-item${i === smp.sel ? ' sel' : ''}" data-i="${i}">
+      <span class="smp-body"><div class="smp-t">${escapeHtml(s.title)}</div><div class="smp-d">${escapeHtml(s.desc || '')}</div></span>
+      <span class="smp-slug">@${escapeHtml(s.slug)}</span>
+    </div>`).join('');
+  pop.hidden = false; smp.open = true;
+  icons();
+  $$('#skillMentionPop .smp-item').forEach(el => {
+    el.onmouseenter = () => { smp.sel = +el.dataset.i; $$('#skillMentionPop .smp-item').forEach(x => x.classList.toggle('sel', +x.dataset.i === smp.sel)); };
+    el.onmousedown = e => { e.preventDefault(); smpPick(+el.dataset.i); };
+  });
+  const selEl = pop.querySelector('.smp-item.sel');
+  if (selEl) selEl.scrollIntoView({ block: 'nearest' });
+}
+function smpUpdate() {
+  const inp = $('#input');
+  if (!inp) return;
+  const tok = smpToken(inp.value, inp.selectionStart ?? inp.value.length);
+  if (!tok) { smpClose(); return; }
+  smp.atIdx = tok.at;
+  smp.items = smpFilter(tok.q);
+  smp.sel = 0;
+  smpRender();
+}
+function smpClose() {
+  const pop = $('#skillMentionPop');
+  if (!pop) return;
+  pop.hidden = true; pop.innerHTML = ''; smp.open = false; smp.items = []; smp.atIdx = -1;
+}
+function smpPick(i) {
+  const sk = smp.items[i];
+  const inp = $('#input');
+  if (!sk || !inp || smp.atIdx < 0) { smpClose(); return; }
+  const caret = inp.selectionStart ?? inp.value.length;
+  inp.value = inp.value.slice(0, smp.atIdx) + '@' + sk.slug + ' ' + inp.value.slice(caret);
+  const pos = smp.atIdx + sk.slug.length + 2;
+  inp.focus();
+  try { inp.setSelectionRange(pos, pos); } catch {}
+  smpClose();
+  inp.dispatchEvent(new Event('input'));
+}
 $('#btnNewChat').onclick = () => { newConv(); toast('plus', 'Nova conversa iniciada.'); };
 $('#btnNewConv').onclick = () => { newConv(); $('#input').focus(); };
 $('#btnQuickNew').onclick = () => { newConv(); toast('plus', 'Nova conversa iniciada.'); $('#input').focus(); };
-$('#quickChips').addEventListener('click', e => {
+$('#quickChips')?.addEventListener('click', e => {
   if (e.target.closest('#btnAddChip')) return;
   const b = e.target.closest('button[data-prompt]');
   if (b) { $('#input').value = b.dataset.prompt; $('#composer').requestSubmit(); }
@@ -497,9 +634,9 @@ function renderChipManage() {
   });
   icons();
 }
-$('#btnAddChip').onclick = () => { $('#chipForm').hidden = false; renderChipManage(); $('#chipLabel').focus(); };
-$('#chipCancel').onclick = () => $('#chipForm').hidden = true;
-$('#chipSave').onclick = () => {
+if ($('#btnAddChip')) $('#btnAddChip').onclick = () => { $('#chipForm').hidden = false; renderChipManage(); $('#chipLabel').focus(); };
+if ($('#chipCancel')) $('#chipCancel').onclick = () => $('#chipForm').hidden = true;
+if ($('#chipSave')) $('#chipSave').onclick = () => {
   const label = $('#chipLabel').value.trim(), prompt = $('#chipPrompt').value.trim();
   if (!label || !prompt) return;
   const arr = getChips(); arr.push({ label: label.slice(0, 24), prompt });
@@ -508,10 +645,104 @@ $('#chipSave').onclick = () => {
   renderCustomChips(); toast('plus', `Botão <b>${escapeHtml(label)}</b> criado. Um clique e a IA recebe o prompt.`);
   log('Botão personalizado: ' + label, 'ok');
 };
-$('#btnAttach').onclick = async () => {
-  const t = await uiPrompt('Anexar contexto', '', 'Cole o texto…', true);
-  if (t) { $('#input').value = `Contexto anexado:\n"""\n${t.slice(0, 4000)}\n"""\n\nMinha pergunta: `; $('#input').focus(); }
-};
+/* ── ANEXAR (hover no clipse → pasta de contexto ou arquivo) ── */
+(() => {
+  const menu = $('#attachMenu'), wrap = $('.attach-wrap');
+  if (!menu || !wrap) return;
+  let hideT = null, hideT2 = null;
+  const openNow = () => { clearTimeout(hideT); clearTimeout(hideT2); menu.hidden = false; requestAnimationFrame(() => requestAnimationFrame(() => menu.classList.add('show'))); };
+  const closeNow = () => { clearTimeout(hideT); clearTimeout(hideT2); menu.classList.remove('show'); menu.hidden = true; };
+  const hide = () => {
+    clearTimeout(hideT); clearTimeout(hideT2);
+    hideT = setTimeout(() => {
+      menu.classList.remove('show');
+      hideT2 = setTimeout(() => { if (!menu.classList.contains('show')) menu.hidden = true; }, 200);
+    }, 150);
+  };
+  wrap.addEventListener('mouseenter', openNow);
+  wrap.addEventListener('mouseleave', hide);
+  menu.addEventListener('mouseenter', () => { clearTimeout(hideT); clearTimeout(hideT2); });
+  menu.addEventListener('mouseleave', hide);
+  $('#btnAttach').onclick = e => { e.stopPropagation(); openNow(); };
+  document.addEventListener('click', e => { if (!wrap.contains(e.target)) closeNow(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeNow(); });
+
+  const TEXT_EXT = /\.(txt|md|json|csv|js|ts|tsx|jsx|html|css|py|yml|yaml|xml|log|srt|vtt|rtf|ini|cfg|conf|sh|sql|rs|go|java|c|h|cpp|hpp|rb|php|swift|kt)$/i;
+  function attachContext(files) {
+    if (!files.length) { toast('paperclip', 'Nenhum arquivo de texto encontrado na seleção.'); return; }
+    const block = files.map(f => `--- ${f.name} ---\n${String(f.content).slice(0, 20000)}`).join('\n\n').slice(0, 60000);
+    $('#input').value = `Contexto anexado:\n"""\n${block}\n"""\n\nMinha pergunta: `;
+    $('#input').focus(); $('#input').dispatchEvent(new Event('input'));
+    toast('paperclip', `<b>${files.length}</b> arquivo(s) de contexto anexado(s).`);
+    log('Contexto anexado: ' + files.map(f => f.name).slice(0, 5).join(', '), 'ok');
+  }
+  function dockMedia(f, kind) {
+    const url = URL.createObjectURL(f);
+    $('#mediaDock').hidden = false;
+    $('#mediaTitle').innerHTML = `${ic(kind === 'video' ? 'play' : 'music')} ${escapeHtml(f.name)}`;
+    $('#mediaBody').innerHTML = kind === 'video'
+      ? `<video controls autoplay style="max-width:100%;max-height:230px;border-radius:10px" src="${url}"></video>`
+      : `<audio controls autoplay src="${url}"></audio>`;
+    icons(); $('#mediaDock').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    $('#input').value = `${kind === 'video' ? 'Vídeo' : 'Áudio'} anexado no dock: ${f.name}\n\nMinha pergunta sobre ele: `;
+    $('#input').focus(); $('#input').dispatchEvent(new Event('input'));
+    toast(kind === 'video' ? 'play' : 'music', `${kind === 'video' ? 'Vídeo' : 'Áudio'} no dock — pergunte sobre ele no chat.`);
+  }
+  menu.querySelector('[data-act="folder"]').onclick = async () => {
+    closeNow();
+    try {
+      if (window.showDirectoryPicker) {
+        const dir = await window.showDirectoryPicker({ mode: 'read' });
+        const files = [];
+        for await (const [name, h] of dir.entries()) {
+          if (files.length >= 8) break;
+          if (h.kind !== 'file' || !TEXT_EXT.test(name)) continue;
+          try { const f = await h.getFile(); if (f.size <= 300000) files.push({ name, content: await f.text() }); } catch {}
+        }
+        attachContext(files);
+      } else { $('#attachDirInput').click(); }
+    } catch { /* cancelado */ }
+  };
+  $('#attachDirInput').onchange = async () => {
+    const sel = [...$('#attachDirInput').files].filter(f => TEXT_EXT.test(f.name)).slice(0, 8);
+    const files = [];
+    for (const f of sel) { try { files.push({ name: f.webkitRelativePath || f.name, content: await f.text() }); } catch {} }
+    $('#attachDirInput').value = '';
+    attachContext(files);
+  };
+  menu.querySelector('[data-act="file"]').onclick = () => { closeNow(); $('#attachFileInput').click(); };
+  $('#attachFileInput').onchange = async () => {
+    const f = $('#attachFileInput').files[0];
+    $('#attachFileInput').value = '';
+    if (!f) return;
+    if (f.type.startsWith('text/') || TEXT_EXT.test(f.name)) {
+      let txt = ''; try { txt = await f.text(); } catch { toast('x', 'Não consegui ler o arquivo.'); return; }
+      attachContext([{ name: f.name, content: txt }]);
+    } else if (f.type.startsWith('audio/') || /\.(mp3|ogg|wav|m4a|flac|aac|opus|webm)$/i.test(f.name)) dockMedia(f, 'audio');
+    else if (f.type.startsWith('video/') || /\.(mp4|webm|mov|mkv|avi|m4v)$/i.test(f.name)) dockMedia(f, 'video');
+    else toast('x', 'Tipo não suportado — use áudio, vídeo ou texto.');
+  };
+})();
+/* ── TOOLTIP DO MIC (hover → popup discreto no padrão do clipe) ── */
+(() => {
+  const wrap = $('.voice-wrap'), tip = $('#voiceTip');
+  if (!wrap || !tip) return;
+  let t1 = null, t2 = null;
+  const show = () => {
+    clearTimeout(t1); clearTimeout(t2);
+    tip.hidden = false;
+    requestAnimationFrame(() => requestAnimationFrame(() => tip.classList.add('show')));
+  };
+  const hide = () => {
+    clearTimeout(t1); clearTimeout(t2);
+    t1 = setTimeout(() => {
+      tip.classList.remove('show');
+      t2 = setTimeout(() => { if (!tip.classList.contains('show')) tip.hidden = true; }, 200);
+    }, 120);
+  };
+  wrap.addEventListener('mouseenter', show);
+  wrap.addEventListener('mouseleave', hide);
+})();
 
 $('#composer').addEventListener('submit', async e => {
   e.preventDefault();
@@ -533,7 +764,7 @@ $('#composer').addEventListener('submit', async e => {
   /* ── v2.1: executa → verifica conclusão → corrige pendência → entrega ── */
   if (window.__runReAct) {
     try {
-      const TOOL_LABEL = { web_search: 'Buscando fontes', web_open: 'Lendo página', open_site: 'Abrindo site', run_skill: 'Executando skill', music_search: 'Buscando música livre', music_download: 'Baixando MP3', music_play: 'Tocando música', create_task: 'Criando tarefa', list_tasks: 'Lendo tarefas', news: 'Lendo notícias', code_read: 'Lendo arquivo', code_list: 'Listando pasta', code_glob: 'Buscando arquivos', code_grep: 'Buscando texto', code_write: 'Escrevendo arquivo', code_edit: 'Editando arquivo', code_bash: 'Executando comando', code_undo: 'Desfazendo' };
+      const TOOL_LABEL = { web_search: 'Buscando fontes', web_open: 'Lendo página', open_site: 'Abrindo site', run_skill: 'Executando skill', music_search: 'Buscando música livre', music_download: 'Baixando MP3', music_play: 'Tocando música', create_task: 'Criando tarefa', list_tasks: 'Lendo tarefas', complete_task: 'Concluindo tarefa', delete_task: 'Deletando tarefa', create_note: 'Criando nota', list_notes: 'Lendo notas', edit_note: 'Editando nota', delete_note: 'Deletando nota', news: 'Lendo notícias', code_read: 'Lendo arquivo', code_list: 'Listando pasta', code_glob: 'Buscando arquivos', code_grep: 'Buscando texto', code_write: 'Escrevendo arquivo', code_edit: 'Editando arquivo', code_bash: 'Executando comando', code_undo: 'Desfazendo' };
       const runAw = agentWin({ icon: 'bot', title: 'Agente · ' + text.slice(0, 60), body: `<div class="awline">${ic('circle-dot')}<span>Iniciando: <b>${escapeHtml(text.slice(0, 100))}</b></span></div>` });
       const execToolReal = async (name, arg) => {
         const label = TOOL_LABEL[name] || name;
@@ -558,7 +789,17 @@ $('#composer').addEventListener('submit', async e => {
             if (!sk) throw new Error('skill inexistente/inativa: ' + arg + '. Slugs válidos: ' + getSkills().filter(s => s.active).map(s => s.slug).join(', '));
             flashSkill(sk.slug);
             if (sk.action) for (const a of sk.action.split('\n').map(s => s.trim()).filter(Boolean)) await runActionLine(a, 'skill:' + sk.slug, win);
-            result = `A skill "${sk.title}" (${sk.slug}) foi executada e os resultados já apareceram no chat. Resuma em português.`;
+            if (sk.prompt) {
+              awStep(aw, `<div class="awline">${ic('chevron-right')}<span>Aplicando prompt da skill <b>${escapeHtml(sk.title)}</b>…</span></div>`);
+              try {
+                result = await callLLM([
+                  { role: 'system', content: sk.prompt + '\nResponda sempre em português, de forma direta e útil.' },
+                  { role: 'user', content: text },
+                ]);
+              } catch { result = `Skill "${sk.title}" executada${sk.action ? ' (ações aplicadas)' : ''}, mas o modelo da skill não respondeu. Resuma o que foi feito.`; }
+            } else {
+              result = `A skill "${sk.title}" (${sk.slug}) foi executada e os resultados já apareceram no chat. Resuma em português.`;
+            }
             doneMsg = `Skill ${sk.title} aplicada.`;
           } else {
             result = await execTool(name, arg, s => awStep(aw, `<div class="awline">${ic('chevron-right')}<span>${escapeHtml(s)}</span></div>`));
@@ -616,7 +857,7 @@ $('#composer').addEventListener('submit', async e => {
     const tool = parseToolCall(out);
     let via = `${PROVIDERS[cfg.provider].label} · ${escapeHtml(cfg.model)}${skill ? ' · skill ' + escapeHtml(skill.title) : ''}`;
     if (tool) {
-      const TOOL_PT = { web_search: 'Buscando fontes', web_open: 'Lendo página', open_site: 'Abrindo site', run_skill: 'Executando skill', music_search: 'Buscando música', music_download: 'Baixando MP3', music_play: 'Tocando música', create_task: 'Criando tarefa', list_tasks: 'Lendo tarefas', news: 'Lendo notícias', code_read: 'Lendo arquivo', code_list: 'Listando pasta', code_glob: 'Buscando arquivos', code_grep: 'Buscando texto', code_write: 'Escrevendo arquivo', code_edit: 'Editando arquivo', code_bash: 'Executando comando', code_undo: 'Desfazendo' };
+      const TOOL_PT = { web_search: 'Buscando fontes', web_open: 'Lendo página', open_site: 'Abrindo site', run_skill: 'Executando skill', music_search: 'Buscando música', music_download: 'Baixando MP3', music_play: 'Tocando música', create_task: 'Criando tarefa', list_tasks: 'Lendo tarefas', complete_task: 'Concluindo tarefa', delete_task: 'Deletando tarefa', create_note: 'Criando nota', list_notes: 'Lendo notas', edit_note: 'Editando nota', delete_note: 'Deletando nota', news: 'Lendo notícias', code_read: 'Lendo arquivo', code_list: 'Listando pasta', code_glob: 'Buscando arquivos', code_grep: 'Buscando texto', code_write: 'Escrevendo arquivo', code_edit: 'Editando arquivo', code_bash: 'Executando comando', code_undo: 'Desfazendo' };
       const tlabel = TOOL_PT[tool.name] || tool.name;
       setCoreState(tlabel, `${tool.name}: ${tool.arg.slice(0, 90)}`);
       const twin = coreWindow({ icon: 'globe', title: tlabel, body: `<b>${escapeHtml(tool.name)}</b> · ${escapeHtml(tool.arg.slice(0, 120))}` });
@@ -646,10 +887,22 @@ $('#composer').addEventListener('submit', async e => {
           flashSkill(sk.slug);
           awStep(aw, `<div class="awline">${ic('chevron-right')}<span>Aplicando skill <b>${escapeHtml(sk.title)}</b>…</span></div>`);
           if (sk.action) for (const a of sk.action.split('\n').map(s => s.trim()).filter(Boolean)) await runActionLine(a, 'skill:' + sk.slug, twin);
-          else awStep(aw, `<div class="awline"><span>Skill sem ação automática — respondendo no modo conversa dela.</span></div>`);
+          if (sk.prompt) {
+            awStep(aw, `<div class="awline">${ic('chevron-right')}<span>Executando prompt da skill…</span></div>`);
+            try {
+              result = await callLLM([
+                { role: 'system', content: sk.prompt + '\nResponda sempre em português, de forma direta e útil.' },
+                { role: 'user', content: text },
+              ]);
+            } catch { result = `Skill "${sk.title}" executada, mas o modelo da skill não respondeu.`; }
+          } else if (sk.action) {
+            result = `A skill "${sk.title}" (${sk.slug}) foi executada no app e os resultados já apareceram no chat. Resuma ao usuário em português o que foi feito.`;
+          } else {
+            awStep(aw, `<div class="awline"><span>Sem ação nem prompt configurados — respondendo no modo conversa dela.</span></div>`);
+            result = `A skill "${sk.title}" foi invocada sem ação/prompt configurados. Pergunte ao usuário o que ele quer que ela faça.`;
+          }
           coreWinDone(twin, 'Skill executada: ' + sk.title);
           awDone(aw, `Skill ${sk.title} aplicada.`);
-          result = `A skill "${sk.title}" (${sk.slug}) foi executada no app e os resultados já apareceram no chat. Resuma ao usuário em português o que foi feito.`;
         } else {
           result = await execTool(tool.name, tool.arg, s => awStep(aw, `<div class="awline">${ic('chevron-right')}<span>${escapeHtml(s)}</span></div>`));
           coreWinDone(twin, `Leitura pronta (${result.length} chars).`);
@@ -1000,6 +1253,48 @@ function detectSkill(text) {
   const t = text.toLowerCase();
   return skills.find(s => t.includes(s.slug) || t.includes(s.title.toLowerCase().split(' ')[0])) || null;
 }
+function findSkillByMention(name) {
+  const n = String(name || '').toLowerCase().trim();
+  if (!n) return null;
+  const skills = getSkills();
+  return skills.find(s => s.slug === n)
+    || skills.find(s => s.slug.startsWith(n))
+    || skills.find(s => s.title.toLowerCase().split(' ')[0] === n)
+    || null;
+}
+async function runSkillMention(sk, task) {
+  const t = String(task || '').trim();
+  const win = coreWindow({ icon: sk.icon || 'sparkles', title: 'Skill · ' + sk.title, body: `<b>${escapeHtml(sk.title)}</b> · <code>${escapeHtml(sk.slug)}</code>${t ? '<br>"' + escapeHtml(t.slice(0, 120)) + '"' : ''}` });
+  flashSkill(sk.slug, true);
+  let acted = 0;
+  if (sk.action) {
+    for (const a of sk.action.split('\n').map(x => x.trim()).filter(Boolean)) { await runActionLine(a, 'skill:' + sk.slug, null); acted++; }
+  }
+  if (sk.prompt && t) {
+    $('#typing').hidden = false;
+    try {
+      const sent = [{ role: 'system', content: sk.prompt + '\nResponda sempre em português, de forma direta e útil.' }, { role: 'user', content: t }];
+      const out = await callLLM(sent);
+      trackLLM(sent, out);
+      $('#typing').hidden = true;
+      addMsg('ai', out, `<span class="src">skill ${escapeHtml(sk.slug)} · ${PROVIDERS[cfg.provider].label} · ${escapeHtml(cfg.model)}</span>`);
+      history.push({ role: 'assistant', content: out });
+    } catch (err) {
+      $('#typing').hidden = true;
+      addHtml('ai', `Skill <b>${escapeHtml(sk.title)}</b> invocada, mas a IA não respondeu (${escapeHtml(String(err.message).slice(0, 80))}). Confira a chave em Configurações → Conexão.`);
+      history.push({ role: 'assistant', content: 'Skill ' + sk.slug + ' falhou: ' + err.message });
+    }
+  } else if (!t && !acted) {
+    addHtml('ai', `<b>${escapeHtml(sk.title)}</b> · <code>${escapeHtml(sk.slug)}</code><br>${escapeHtml(sk.desc || '')}${sk.prompt ? `<br><br><i>Prompt:</i> ${escapeHtml(sk.prompt.slice(0, 220))}…` : ''}<br><span class="src">use <code>@${escapeHtml(sk.slug)} &lt;tarefa&gt;</code> p/ executar</span>`);
+    history.push({ role: 'assistant', content: 'Skill ' + sk.slug + ': ' + (sk.desc || sk.title) });
+  } else {
+    addHtml('ai', `Skill <b>${escapeHtml(sk.title)}</b> invocada${acted ? ` · ${acted} ação(ões) executada(s)` : ''}.`);
+    history.push({ role: 'assistant', content: 'Skill ' + sk.slug + ' invocada' + (acted ? ` (${acted} ações)` : '') });
+  }
+  coreWinDone(win, 'Skill aplicada.');
+  log('Skill @' + sk.slug + (t ? ' · ' + t.slice(0, 50) : ''), 'ok');
+  return true;
+}
 function renderSideSkills() {
   const box = $('#sideSkills'); box.innerHTML = '';
   getSkills().forEach(s => {
@@ -1061,29 +1356,46 @@ function renderSkills() {
   });
   icons();
 }
-let editingSkill = -1;
+let editingSkillSlug = null;
 function openSkillForm(s = null) {
   $('#skillForm').hidden = false;
   $('#skillFormTitle').textContent = s ? 'Editar skill' : 'Nova skill';
-  editingSkill = s ? getSkills().indexOf(s) : -1;
+  editingSkillSlug = s ? s.slug : null;
   $('#sSlug').value = s?.slug || ''; $('#sIcon').value = s?.icon || 'sparkles';
   $('#sTitle').value = s?.title || ''; $('#sDesc').value = s?.desc || '';
   $('#sPrompt').value = s?.prompt || ''; $('#sAction').value = s?.action || '';
+  $('#sTitle').focus();
 }
 $('#btnNewSkill').onclick = () => openSkillForm(null);
 $('#btnCancelSkill').onclick = () => $('#skillForm').hidden = true;
+function slugifySkill(v) {
+  return String(v || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9\s-]/g, '').trim().replace(/\s+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+}
 $('#skillForm').onsubmit = e => {
   e.preventDefault();
-  const s = { slug: $('#sSlug').value.trim().toLowerCase().replace(/\s+/g, '-') || 'nova-skill',
-    icon: ($('#sIcon').value.trim().toLowerCase() || 'sparkles'), title: $('#sTitle').value || 'Nova skill',
-    desc: $('#sDesc').value || '', prompt: $('#sPrompt').value || 'Seja útil.', action: $('#sAction').value || '', active: true };
-  if (!/^[a-z-]+$/.test(s.icon)) s.icon = 'sparkles';
+  const title = $('#sTitle').value.trim() || 'Nova skill';
+  let slug = slugifySkill($('#sSlug').value) || slugifySkill(title) || 'nova-skill';
   const all = getSkills();
-  if (editingSkill >= 0) all[editingSkill] = s; else all.push(s);
-  store.set('deletedSkills', store.get('deletedSkills', []).filter(x => x !== s.slug));
-  saveSkills(all); $('#skillForm').hidden = true;
+  const oldIdx = editingSkillSlug ? all.findIndex(x => x.slug === editingSkillSlug) : -1;
+  const old = oldIdx >= 0 ? all[oldIdx] : null;
+  if (!old || old.slug !== slug) {
+    let n = 2; const base = slug;
+    while (all.some(x => x.slug === slug)) { slug = `${base}-${n}`; n++; }
+  }
+  if (old && old.slug !== slug && DEFAULT_SKILLS.some(d => d.slug === old.slug)) {
+    store.set('deletedSkills', [...new Set([...(store.get('deletedSkills', []) || []), old.slug])]);
+  }
+  const s = { slug, icon: $('#sIcon').value.trim().toLowerCase() || 'sparkles',
+    title, desc: $('#sDesc').value.trim(),
+    prompt: $('#sPrompt').value.trim() || 'Seja útil e responda em português, de forma direta.',
+    action: $('#sAction').value.trim(), active: old ? old.active !== false : true };
+  if (!/^[a-z-]+$/.test(s.icon)) s.icon = 'sparkles';
+  if (oldIdx >= 0) all[oldIdx] = s; else all.push(s);
+  store.set('deletedSkills', (store.get('deletedSkills', []) || []).filter(x => x !== s.slug));
+  saveSkills(all); $('#skillForm').hidden = true; editingSkillSlug = null;
   flashSkill(s.slug, true);
-  toast('sparkles', `Skill <b>${escapeHtml(s.title)}</b> salva.`);
+  toast('sparkles', `Skill <b>${escapeHtml(s.title)}</b> salva — o agente já pode usá-la via <code>${escapeHtml(s.slug)}</code>.`);
   log('Skill salva: ' + s.slug, 'ok');
 };
 
@@ -1322,7 +1634,7 @@ function renderTasks() {
     const d = document.createElement('div');
     d.className = 'task' + (t.done ? ' done' : '');
     d.innerHTML = `<div class="task-top"><input type="checkbox" ${t.done ? 'checked' : ''} data-c="${i}"><b style="font-size:13px">${escapeHtml(t.text)}</b></div>
-      <div class="actions btnrow" style="margin-top:7px"><button class="iconbtn" data-ai="${i}">${ic('sparkles')}executar com IA</button><button class="iconbtn danger" data-del="${i}">${ic('trash-2')}</button></div>`;
+      <div class="actions btnrow" style="margin-top:7px"><button class="iconbtn" data-ai="${i}">${ic('sparkles')}executar com IA</button><button class="iconbtn ghost" data-edit="${i}" title="Editar tarefa">${ic('pencil')}</button><button class="iconbtn danger" data-del="${i}">${ic('trash-2')}</button></div>`;
     box.appendChild(d);
   });
   $$('#taskList [data-c]').forEach(c => c.onchange = () => { const t = getTasks(); t[+c.dataset.c].done = c.checked; store.set('tasks', t); renderTasks(); });
@@ -1330,6 +1642,26 @@ function renderTasks() {
   $$('#taskList [data-ai]').forEach(b => b.onclick = () => {
     const t = getTasks()[+b.dataset.ai];
     $('#input').value = 'Execute esta tarefa passo a passo: ' + t.text; $('#composer').requestSubmit();
+  });
+  $$('#taskList [data-edit]').forEach(b => b.onclick = () => {
+    const i = +b.dataset.edit;
+    const card = b.closest('.task');
+    const label = card && card.querySelector('b');
+    if (!label || card.querySelector('.task-edit')) return;
+    const inp = document.createElement('input');
+    inp.type = 'text'; inp.className = 'task-edit'; inp.value = getTasks()[i].text;
+    label.replaceWith(inp);
+    inp.focus(); inp.select();
+    let closed = false;
+    const save = () => {
+      if (closed) return; closed = true;
+      const v = inp.value.trim();
+      const t = getTasks();
+      if (v && t[i] && v !== t[i].text) { t[i].text = v.slice(0, 200); store.set('tasks', t); log('Tarefa editada: ' + v.slice(0, 80), 'info'); }
+      renderTasks();
+    };
+    inp.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); save(); } else if (e.key === 'Escape') { closed = true; renderTasks(); } };
+    inp.onblur = save;
   });
   icons();
 }
@@ -1350,6 +1682,97 @@ function createTask(text) {
   return t[0];
 }
 $('#btnNewTask').onclick = () => $('#tText').focus();
+
+/* ───────── NOTAS ───────── */
+function getNotes() {
+  const saved = store.get('notes', null);
+  if (saved && Array.isArray(saved)) return saved.filter(n => n && typeof n.text === 'string');
+  return [];
+}
+function saveNotes(n) { store.set('notes', n); renderNotes(); }
+function createNote(title, text, src) {
+  const t = String(title || '').trim().slice(0, 120);
+  const v = String(text || '').trim().slice(0, 8000);
+  if (!t && !v) return null;
+  const n = { id: 'n' + Date.now(), title: t || v.slice(0, 40), text: v, ts: Date.now(), src: src === 'manual' ? 'manual' : src ? 'agent' : '' };
+  const all = getNotes(); all.unshift(n); saveNotes(all);
+  try { toast('sticky-note', `Nota criada: <b>${escapeHtml(n.title.slice(0, 50))}</b>`); } catch {}
+  log('Nota criada: ' + n.title.slice(0, 80), 'ok');
+  return n;
+}
+function renderNotes() {
+  const box = $('#noteList'); if (!box) return;
+  box.innerHTML = '';
+  const all = getNotes();
+  if (!all.length) { box.innerHTML = '<p class="hint">Nenhuma nota ainda. Crie uma manualmente ou peça no chat: "crie uma nota sobre…".</p>'; return; }
+  all.forEach((n, i) => {
+    const d = document.createElement('div');
+    d.className = 'task';
+    d.innerHTML = `<div class="task-top"><b style="font-size:13px">${escapeHtml(n.title)}</b><span class="src" style="margin-left:auto;flex-shrink:0">${new Date(n.ts).toLocaleDateString('pt-BR')}</span></div>
+      <div style="font-size:12px;color:var(--muted);margin-top:5px;white-space:pre-wrap;word-break:break-word">${escapeHtml((n.text || '').slice(0, 260))}${n.text && n.text.length > 260 ? '…' : ''}</div>
+      <div class="actions btnrow" style="margin-top:8px"><button class="iconbtn" data-nedit="${i}">${ic('pencil')}editar</button><button class="iconbtn danger" data-ndel="${i}">${ic('trash-2')}</button></div>`;
+    box.appendChild(d);
+    d.onclick = e => {
+      if (e.target.closest('button')) return;
+      openNoteModal(getNotes().find(x => x.id === n.id));
+    };
+  });
+  $$('#noteList [data-nedit]').forEach(b => b.onclick = e => { e.stopPropagation(); noteFormOpen(getNotes()[+b.dataset.nedit]); });
+  $$('#noteList [data-ndel]').forEach(b => b.onclick = async e => {
+    e.stopPropagation();
+    const all = getNotes(); const n = all[+b.dataset.ndel];
+    if (!n) return;
+    if (!(await uiConfirm('Excluir nota', `Remover "${n.title}"?`, 'Excluir'))) return;
+    all.splice(+b.dataset.ndel, 1); saveNotes(all);
+    toast('trash-2', 'Nota excluída.'); log('Nota excluída: ' + n.title.slice(0, 80), 'info');
+  });
+  icons();
+}
+let editingNoteId = null;
+function openNoteModal(n) {
+  if (!n) return;
+  $('#noteModalTitle').textContent = n.title || 'Nota';
+  $('#noteModalBody').textContent = n.text || '';
+  const d = new Date(n.ts || Date.now());
+  const quando = `Criada em ${d.toLocaleDateString('pt-BR')} às ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+  const origem = n.src === 'manual' ? 'Manual' : n.src === 'agent' ? 'Agente' : '—';
+  $('#noteModalMeta').textContent = `${quando} · ${origem}`;
+  $('#noteModal').hidden = false;
+  icons();
+}
+$('#noteModalClose').onclick = () => { $('#noteModal').hidden = true; };
+$('#noteModal').addEventListener('click', e => { if (e.target === e.currentTarget) $('#noteModal').hidden = true; });
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { const m = $('#noteModal'); if (m && !m.hidden) m.hidden = true; }
+});
+function noteFormOpen(n = null) {
+  $('#noteForm').hidden = false;
+  $('#noteFormTitle').textContent = n ? 'Editar nota' : 'Nova nota';
+  editingNoteId = n ? n.id : null;
+  $('#nTitle').value = n?.title || ''; $('#nText').value = n?.text || '';
+  $('#nTitle').focus();
+  try { switchTab('notes'); } catch {}
+}
+$('#btnNewNote').onclick = () => noteFormOpen(null);
+$('#btnCancelNote').onclick = () => { $('#noteForm').hidden = true; editingNoteId = null; };
+$('#noteForm').onsubmit = e => {
+  e.preventDefault();
+  const title = $('#nTitle').value.trim(), text = $('#nText').value.trim();
+  if (!title && !text) return;
+  const all = getNotes();
+  if (editingNoteId) {
+    const n = all.find(x => x.id === editingNoteId);
+    if (n) { n.title = title || text.slice(0, 40); n.text = text.slice(0, 8000); }
+    log('Nota editada: ' + (title || text.slice(0, 40)), 'ok');
+  } else {
+    all.unshift({ id: 'n' + Date.now(), title: title || text.slice(0, 40), text: text.slice(0, 8000), ts: Date.now(), src: 'manual' });
+    log('Nota criada: ' + (title || text.slice(0, 40)), 'ok');
+  }
+  saveNotes(all);
+  $('#noteForm').hidden = true; editingNoteId = null;
+  $('#nTitle').value = ''; $('#nText').value = '';
+  toast('sticky-note', 'Nota salva.');
+};
 
 /* ───────── MODELOS DA API (via chave) ───────── */
 async function listModels(p, key) {
@@ -1415,11 +1838,6 @@ async function fetchModels(auto = false) {
 }
 $('#btnModels').onclick = () => { saveCfg(true); fetchModels(false); };
 $('#btnModelsQuick').onclick = () => { saveCfg(true); fetchModels(false); };
-$('#modelQuick').onchange = () => {
-  cfg.model = $('#modelQuick').value;
-  if ([...$('#model').options].some(o => o.value === cfg.model)) $('#model').value = cfg.model;
-  store.set('cfg', cfg); updateConn();
-};
 
 /* ───────── PLANO DE FUNDO (seleção + desfoque) ───────── */
 function getBg() { return Object.assign({ mode: 'combo', blur: 6, custom: '', preset: '' }, store.get('bg', {})); }
@@ -1644,14 +2062,18 @@ function slugify(s) {
 }
 async function tryLocalAutomation(text) {
   const t = text.trim();
-  // 0b) AGENTES — "@Nome tarefa" · "@equipe t1; t2"
-  const mag = t.match(/^@([\w-]+)\s+([\s\S]+)/);
+  // 0b) AGENTES + SKILLS — "@Nome tarefa" · "@equipe t1; t2" · "@slug-da-skill tarefa"
+  const mag = t.match(/^@([\w-]+)(?:\s+([\s\S]+))?/);
   if (mag) {
-    if (/^(equipe|time)$/i.test(mag[1])) return await teamFlow(mag[2]);
-    const ag = agentByName(mag[1]);
-    if (ag) { await runAgent(ag, mag[2]); return true; }
+    const mention = mag[1], rest = (mag[2] || '').trim();
+    if (/^(equipe|time)$/i.test(mention) && rest) return await teamFlow(rest);
+    const ag = agentByName(mention);
+    if (ag) { await runAgent(ag, rest || ''); return true; }
+    const sk = findSkillByMention(mention);
+    if (sk) { await runSkillMention(sk, rest); return true; }
     const names = getAgents().map(a => '@' + a.name).join(' · ');
-    addHtml('ai', `Não achei o agente <b>${escapeHtml(mag[1])}</b>. Membros: ${names || 'nenhum'} — ou use <b>@equipe</b> para acionar o time.`);
+    const skNames = getSkills().filter(s => s.active).map(s => '@' + s.slug).slice(0, 10).join(' · ');
+    addHtml('ai', `Não achei <b>@${escapeHtml(mention)}</b>.<br>Agentes: ${names || 'nenhum'}<br>Skills: ${skNames || 'nenhuma'}<br><span class="src">ou use <b>@equipe</b> para acionar o time</span>`);
     return true;
   }
   // 0a) ABRIR SITES/VÍDEOS — resposta garantida com card, nunca abre aba sozinho
@@ -1733,6 +2155,64 @@ async function tryLocalAutomation(text) {
       history.push({ role: 'assistant', content: 'Tarefa criada: ' + txt });
       persist(); return true;
     }
+  }
+  // 0a3b) NOTA — "crie uma nota ..." · "anote ..." (sem LLM, só pedidos curtos)
+  if (t.length < 120 && /nota/i.test(t) && !/edit|atualiz|delet|apag|remov|lista|mostra|tem\b/i.test(t)) {
+    mm = t.match(/(?:crie|cria|criar|anote|anotar|salve|salvar|adiciona(?:r)?|adicione)\s+(?:uma\s+)?nota\s*(?:de\s+|com\s+|sobre\s+|que\s+|dizendo\s+|para\s+)?[:\-]?\s*([^.?!\n]{2,110})/i);
+    if (mm && (mm[1] || '').trim()) {
+      const n = createNote('', mm[1].trim(), 'agent');
+      addHtml('ai', `<b>Nota criada:</b> ${escapeHtml(n.title)}<br><span class="src">aba Notas · execução local · peça "editar nota" p/ mudar</span>`);
+      history.push({ role: 'assistant', content: 'Nota criada: ' + n.title });
+      persist(); return true;
+    }
+  }
+  // 0a3c) DELETAR NOTA — "apague a nota X" (sem LLM; se não achar, cai no agente p/ tool)
+  if (t.length < 120 && /nota/i.test(t) && /(delet|apag|remov|exclu)/i.test(t) && !/cri|anote/i.test(t)) {
+    mm = t.match(/(?:delet(?:e|ar)|apag(?:ue|ar)|remov(?:a|er)|exclu(?:a|ir))\s+(?:a\s+)?nota\s*(?:sobre\s+|de\s+|com\s+|chamada\s+|que\s+|minha\s+)?["“]?([^"”.\n!]{2,80})/i);
+    if (mm) {
+      const q = mm[1].trim().toLowerCase().replace(/["“”]+$/, '').trim();
+      const all = getNotes();
+      let ix = all.findIndex(x => (x.title + ' ' + x.text).toLowerCase().includes(q));
+      if (ix < 0 && /^\d+$/.test(q)) ix = +q - 1;
+      if (ix >= 0 && all[ix]) {
+        const rm = all.splice(ix, 1)[0];
+        saveNotes(all);
+        try { switchTab('notes'); } catch {}
+        addHtml('ai', `<b>Nota deletada:</b> ${escapeHtml(rm.title)}<br><span class="src">aba Notas · execução local (sem API)</span>`);
+        history.push({ role: 'assistant', content: 'Nota deletada: ' + rm.title });
+        log('Nota deletada (local): ' + rm.title.slice(0, 80), 'ok');
+        persist(); return true;
+      }
+    }
+  }
+  // 0a3d) EDITAR NOTA — "edite a nota X para: novo texto" (sem LLM)
+  if (t.length < 300 && /nota/i.test(t) && /(edit|atualiz|mudar|alter)/i.test(t) && !/delet|apag|remov|exclu|cri|anote/i.test(t)) {
+    mm = t.match(/(?:edite|editar|atualiz(?:e|ar)|mude|altere)\s+(?:a\s+)?nota\s*(?:sobre\s+|de\s+|com\s+|chamada\s+|que\s+)?["“]?([^"”.:\n]{2,60})["”]?\s*(?:para|:|com)\s+([^.!\n]{2,400})/i);
+    if (mm) {
+      const q = mm[1].trim().toLowerCase(); const novo = mm[2].trim();
+      const all = getNotes();
+      let n = all.find(x => (x.title + ' ' + x.text).toLowerCase().includes(q));
+      if (!n && /^\d+$/.test(q)) n = all[+q - 1];
+      if (n && novo) {
+        n.text = novo.slice(0, 8000);
+        saveNotes(all);
+        try { switchTab('notes'); } catch {}
+        addHtml('ai', `<b>Nota editada:</b> ${escapeHtml(n.title)}<br><span class="src">aba Notas · execução local (sem API)</span>`);
+        history.push({ role: 'assistant', content: 'Nota editada: ' + n.title });
+        log('Nota editada (local): ' + n.title.slice(0, 80), 'ok');
+        persist(); return true;
+      }
+    }
+  }
+  // 0a3e) CONSULTA DE NOTAS — "minhas notas?" · "lista notas" (sem LLM)
+  if (t.length < 100 && /nota/i.test(t) && /(minhas?|tem|alguma|lista|mostra|quais|o que)/i.test(t) && !/cri|anote|edit|delet|apag|remov/i.test(t)) {
+    const all = getNotes();
+    try { switchTab('notes'); } catch {}
+    if (!all.length) addHtml('ai', 'Você não tem <b>nenhuma nota</b> salva. Quer que eu crie uma?');
+    else addHtml('ai', `<b>Suas notas (${all.length}):</b><br>` + all.slice(0, 10).map((x, i) => `${i + 1}. <b>${escapeHtml(x.title)}</b> — ${escapeHtml((x.text || '').slice(0, 80))}`).join('<br>') + `<br><span class="src">aba Notas · "apague a nota X" ou "edite a nota X para…"</span>`);
+    history.push({ role: 'assistant', content: all.length ? `Notas (${all.length}): ${all.map(x => x.title).join(' | ')}` : 'Nenhuma nota' });
+    log('Consulta notas: ' + all.length + ' salva(s)', 'info');
+    persist(); return true;
   }
   // 1) LEMBRETE — "me lembre às 14:30 de X" · "lembrete 14:30 X" · "às 14:30 me avise X"
   let m = t.match(/(?:me\s+)?lembr(?:e|ar|a-me|a)[\s\wà-ú,]*?(\d{1,2}:\d{2})\s*(?:de|para|que|:)?\s*(.+)?/i)
@@ -2322,11 +2802,11 @@ try {
 paintWorkDir();
 
 /* ───────── NAVEGADOR NEXUS (ferramentas web p/ qualquer modelo) ───────── */
-const TOOLS_SYS = `\n\n[FERRAMENTAS — web + música local. REGRA DE OURO: se dá p/ responder direto, RESPONDA DIRETO sem tool. Só use tool quando pedir dado externo/ação (notícia atual, abrir site, criar/ler tarefa, tocar/baixar). NUNCA use JSON {"name":...} — só o formato <tool>. Quando precisar, responda SOMENTE com 1 chamada neste formato exato:\n<tool name="web_search">sua consulta</tool>\n<tool name="web_open">https://url-completa</tool>\n<tool name="open_site">youtube | gmail | github | nome do site ou URL</tool> — use SEMPRE que pedir ABRIR/VER/ACESSAR.\n<tool name="music_search">termo</tool> — busca PRIMEIRO na biblioteca local do usuário (upada no player à esquerda), depois Archive/Wiki. Use p/ "toca X".\n<tool name="music_download">termo</tool> — baixa o MP3 do 1º resultado.\n<tool name="create_task">texto da tarefa</tool> — use SEMPRE que pedir CRIAR/ADICIONAR tarefa; o sistema salva na aba Tarefas.\n<tool name="list_tasks"></tool> — use SEMPRE que perguntar SE TEM tarefa/pendência/o que falta; o sistema devolve a lista real. Responda SÓ com os dados retornados.\n<tool name="run_skill">slug-da-skill</tool>.\nMúsica: se o usuário citar nome da biblioteca local, use music_search com esse nome — o sistema já prioriza locais. Controles (pausa/próxima) são locais, apenas confirme.\nNUNCA explique passos para abrir/pesquisar/tocar: invoque a ferramenta e deixe o sistema executar.\nO sistema executa e devolve o resultado; aí responda em português citando fontes/links.]\n\n[CODING AGENT — arquivos do projeto, só quando pedir criar/editar/ler código. Workspace = pasta autorizada em Configurações → Coding.\n<tool name="code_read">{"path":"src/app.js","offset":0,"limit":120}</tool> — lê arquivo (offset/limit p/ grandes). Leia antes de editar.\n<tool name="code_list">{"path":"src"}</tool> — lista pasta ({} = raiz).\n<tool name="code_glob">{"pattern":"src/**/*.js"}</tool> — acha arquivos (*, **, ?).\n<tool name="code_grep">{"pattern":"TODO|FIXME","include":"*.js"}</tool> — busca texto (regex) no projeto.\n<tool name="code_write">{"path":"src/novo.js","content":"...código completo..."}</tool> — cria/sobrescreve o arquivo INTEIRO (cria pastas). P/ novo ou reescrita grande. Pula se idêntico.\n<tool name="code_edit">{"path":"src/app.js","old_string":"trecho exato","new_string":"novo"}</tool> — troca precisa; old_string deve existir exatamente. P/ mudança pequena. "replace_all":true p/ todas.\n<tool name="code_bash">{"cmd":"npm test","timeout_ms":60000}</tool> — shell no projeto (exige bridge.py + permissão).\nRegras: JSON válido na tag; nunca escreva o literal </tool> dentro de content; escrita pode pedir confirmação com diff (ask) ou ser negada (modo Plan/deny); Desfazer reverte a última mudança.
+const TOOLS_SYS = `\n\n[FERRAMENTAS — web + música local. REGRA DE OURO: se dá p/ responder direto, RESPONDA DIRETO sem tool. Só use tool quando pedir dado externo/ação (notícia atual, abrir site, criar/ler tarefa, tocar/baixar). NUNCA use JSON {"name":...} — só o formato <tool>. Quando precisar, responda SOMENTE com 1 chamada neste formato exato:\n<tool name="web_search">sua consulta</tool>\n<tool name="web_open">https://url-completa</tool>\n<tool name="open_site">youtube | gmail | github | nome do site ou URL</tool> — use SEMPRE que pedir ABRIR/VER/ACESSAR.\n<tool name="music_search">termo</tool> — busca PRIMEIRO na biblioteca local do usuário (upada no player à esquerda), depois Archive/Wiki. Use p/ "toca X".\n<tool name="music_download">termo</tool> — baixa o MP3 do 1º resultado.\n<tool name="create_task">texto da tarefa</tool> — use SEMPRE que pedir CRIAR/ADICIONAR tarefa; o sistema salva na aba Tarefas.\n<tool name="list_tasks"></tool> — use SEMPRE que perguntar SE TEM tarefa/pendência/o que falta; o sistema devolve a lista real. Responda SÓ com os dados retornados.\n<tool name="complete_task">texto (ou parte) da tarefa</tool> — use SEMPRE que pedir CONCLUIR/MARCAR COMO FEITA/TERMINAR tarefa; o sistema marca como concluída na aba Tarefas.\n<tool name="delete_task">texto (ou parte) da tarefa</tool> — use SEMPRE que pedir DELETAR/APAGAR/REMOVER tarefa; o sistema remove da aba Tarefas.\n<tool name="create_note">{"title":"Título","text":"conteúdo"}</tool> — use SEMPRE que pedir CRIAR/ANOTAR/ANOTE nota; o sistema salva na aba Notas.\n<tool name="list_notes"></tool> — use SEMPRE que perguntar SE TEM nota/minhas notas; devolve a lista real.\n<tool name="edit_note">{"match":"trecho da nota","text":"novo conteúdo"}</tool> — use quando pedir EDITAR/ATUALIZAR/MUDAR nota.\n<tool name="delete_note">trecho da nota ou nº</tool> — use quando pedir DELETAR/APAGAR/REMOVER nota.\n<tool name="run_skill">slug-da-skill</tool>.\nMúsica: se o usuário citar nome da biblioteca local, use music_search com esse nome — o sistema já prioriza locais. Controles (pausa/próxima) são locais, apenas confirme.\nNUNCA explique passos para abrir/pesquisar/tocar: invoque a ferramenta e deixe o sistema executar.\nO sistema executa e devolve o resultado; aí responda em português citando fontes/links.]\n\n[CODING AGENT — arquivos do projeto, só quando pedir criar/editar/ler código. Workspace = pasta autorizada em Configurações → Coding.\n<tool name="code_read">{"path":"src/app.js","offset":0,"limit":120}</tool> — lê arquivo (offset/limit p/ grandes). Leia antes de editar.\n<tool name="code_list">{"path":"src"}</tool> — lista pasta ({} = raiz).\n<tool name="code_glob">{"pattern":"src/**/*.js"}</tool> — acha arquivos (*, **, ?).\n<tool name="code_grep">{"pattern":"TODO|FIXME","include":"*.js"}</tool> — busca texto (regex) no projeto.\n<tool name="code_write">{"path":"src/novo.js","content":"...código completo..."}</tool> — cria/sobrescreve o arquivo INTEIRO (cria pastas). P/ novo ou reescrita grande. Pula se idêntico.\n<tool name="code_edit">{"path":"src/app.js","old_string":"trecho exato","new_string":"novo"}</tool> — troca precisa; old_string deve existir exatamente. P/ mudança pequena. "replace_all":true p/ todas.\n<tool name="code_bash">{"cmd":"npm test","timeout_ms":60000}</tool> — shell no projeto (exige bridge.py + permissão).\nRegras: JSON válido na tag; nunca escreva o literal </tool> dentro de content; escrita pode pedir confirmação com diff (ask) ou ser negada (modo Plan/deny); Desfazer reverte a última mudança.
 Ao CRIAR código (landing page, site, script), SEMPRE invoque code_write — NUNCA cole o arquivo inteiro no chat.]`;
 function parseToolCall(text) {
   const s = String(text || '');
-  const m = s.match(/<tool\s+name=["'](web_search|web_open|news|open_site|run_skill|music_search|music_download|music_play|create_task|list_tasks|code_read|code_list|code_glob|code_grep|code_write|code_edit|code_bash)["']\s*>([\s\S]*?)<\/tool>/i);
+  const m = s.match(/<tool\s+name=["'](web_search|web_open|news|open_site|run_skill|music_search|music_download|music_play|create_task|list_tasks|complete_task|delete_task|create_note|list_notes|edit_note|delete_note|code_read|code_list|code_glob|code_grep|code_write|code_edit|code_bash)["']\s*>([\s\S]*?)<\/tool>/i);
   if (m) { const nm = m[1].toLowerCase(); return { name: nm, arg: m[2].trim().slice(0, nm.startsWith('code_') ? 20000 : 500) }; }
   try {
     const jm = s.match(/\{\s*"name"\s*:\s*"([\w-]+)"\s*,\s*"arguments"\s*:\s*(\{[\s\S]*?\})\s*\}/);
@@ -2586,6 +3066,112 @@ async function execTool(name, arg, step) {
       + pend.slice(0, 10).map((x, i) => `${i + 1}. [PENDENTE] ${x.text}`).join('\n')
       + (done.length ? `\nConcluídas: ${done.slice(0, 5).map(x => x.text).join(' | ')}` : '');
   }
+  if (name === 'complete_task') {
+    say('Concluindo tarefa…');
+    const raw = String(arg || '').trim();
+    const q = raw.toLowerCase();
+    if (!q) throw new Error('informe o texto da tarefa a concluir');
+    const all = getTasks();
+    let idx = all.findIndex(x => !x.done && x.text.toLowerCase().includes(q));
+    if (idx < 0 && /^\d+$/.test(q)) {
+      const pend = all.filter(x => !x.done);
+      const p = pend[+q - 1];
+      if (p) idx = all.indexOf(p);
+    }
+    if (idx < 0) {
+      const pend = all.filter(x => !x.done);
+      return 'TAREFA NÃO ENCONTRADA: nenhuma pendente bate com "' + raw + '".'
+        + (pend.length ? ' Pendentes: ' + pend.map((x, i) => `${i + 1}. ${x.text}`).join(' | ') : ' Nenhuma tarefa pendente.');
+    }
+    all[idx].done = true;
+    store.set('tasks', all); renderTasks();
+    try { switchTab('tasks'); } catch {}
+    const v = all[idx].text;
+    addHtml('ai', `<b>Tarefa concluída:</b> ${escapeHtml(v)}`);
+    history.push({ role: 'assistant', content: 'Tarefa concluída: ' + v }); persist();
+    log('Tarefa concluída: ' + v.slice(0, 80), 'ok');
+    return `TAREFA CONCLUÍDA: ${v}`;
+  }
+  if (name === 'delete_task') {
+    say('Deletando tarefa…');
+    const raw = String(arg || '').trim();
+    const q = raw.toLowerCase();
+    if (!q) throw new Error('informe o texto da tarefa a deletar');
+    const all = getTasks();
+    let idx = all.findIndex(x => x.text.toLowerCase().includes(q));
+    if (idx < 0 && /^\d+$/.test(q)) {
+      const pend = all.filter(x => !x.done);
+      const p = pend[+q - 1];
+      if (p) idx = all.indexOf(p);
+    }
+    if (idx < 0) {
+      return 'TAREFA NÃO ENCONTRADA: nenhuma bate com "' + raw + '".'
+        + (all.length ? ' Salvas: ' + all.map((x, i) => `${i + 1}. ${x.text}`).join(' | ') : ' Nenhuma tarefa salva.');
+    }
+    const v = all[idx].text;
+    all.splice(idx, 1);
+    store.set('tasks', all); renderTasks();
+    try { switchTab('tasks'); } catch {}
+    addHtml('ai', `<b>Tarefa deletada:</b> ${escapeHtml(v)}`);
+    history.push({ role: 'assistant', content: 'Tarefa deletada: ' + v }); persist();
+    log('Tarefa deletada: ' + v.slice(0, 80), 'ok');
+    return `TAREFA DELETADA: ${v}`;
+  }
+  if (name === 'create_note') {
+    say('Criando nota…');
+    let title = '', text = '';
+    const raw = String(arg || '').trim();
+    try { const j = JSON.parse(raw); title = String(j.title || ''); text = String(j.text || j.content || ''); } catch { text = raw; }
+    if (!text.trim() && !title.trim()) throw new Error('conteúdo da nota vazio');
+    const n = createNote(title, text, 'agent');
+    say('Nota salva.');
+    addHtml('ai', `<b>Nota criada:</b> ${escapeHtml(n.title)}<br><span class="src">aba Notas · peça "editar nota" p/ mudar</span>`);
+    history.push({ role: 'assistant', content: 'Nota criada: ' + n.title }); persist();
+    return `NOTA CRIADA: ${n.title} — ${n.text.slice(0, 300)}`;
+  }
+  if (name === 'list_notes') {
+    say('Lendo suas notas…');
+    const all = getNotes();
+    try { switchTab('notes'); } catch {}
+    if (!all.length) return 'NOTAS: nenhuma nota salva.';
+    return `NOTAS (${all.length}):\n` + all.slice(0, 10).map((n, i) => `${i + 1}. ${n.title}: ${n.text.slice(0, 160)}`).join('\n');
+  }
+  if (name === 'edit_note') {
+    say('Editando nota…');
+    let match = '', text = '';
+    const raw = String(arg || '').trim();
+    try { const j = JSON.parse(raw); match = String(j.match || j.find || ''); text = String(j.text || j.content || ''); } catch { throw new Error('use edit_note {"match":"trecho da nota","text":"novo conteúdo"}'); }
+    if (!match || !text) throw new Error('match e text são obrigatórios');
+    const all = getNotes();
+    const q = match.toLowerCase();
+    let n = all.find(x => x.id === match) || all.find(x => (x.title + ' ' + x.text).toLowerCase().includes(q)) || all[+match - 1];
+    if (!n) return 'NOTA NÃO ENCONTRADA: nenhuma bate com "' + match + '". Salvas: ' + (all.map((x, i) => `${i + 1}. ${x.title}`).join(' | ') || 'nenhuma');
+    n.text = String(text).slice(0, 8000);
+    if (!n.title) n.title = n.text.slice(0, 40);
+    saveNotes(all);
+    try { switchTab('notes'); } catch {}
+    addHtml('ai', `<b>Nota editada:</b> ${escapeHtml(n.title)}`);
+    history.push({ role: 'assistant', content: 'Nota editada: ' + n.title }); persist();
+    log('Nota editada: ' + n.title.slice(0, 80), 'ok');
+    return `NOTA EDITADA: ${n.title} — ${n.text.slice(0, 300)}`;
+  }
+  if (name === 'delete_note') {
+    say('Deletando nota…');
+    const raw = String(arg || '').trim();
+    if (!raw) throw new Error('informe trecho da nota a deletar');
+    const all = getNotes();
+    const q = raw.toLowerCase();
+    let ix = all.findIndex(x => x.id === raw || (x.title + ' ' + x.text).toLowerCase().includes(q));
+    if (ix < 0 && /^\d+$/.test(raw)) ix = +raw - 1;
+    if (ix < 0 || !all[ix]) return 'NOTA NÃO ENCONTRADA: nenhuma bate com "' + raw + '". Salvas: ' + (all.map((x, i) => `${i + 1}. ${x.title}`).join(' | ') || 'nenhuma');
+    const rm = all.splice(ix, 1)[0];
+    saveNotes(all);
+    try { switchTab('notes'); } catch {}
+    addHtml('ai', `<b>Nota deletada:</b> ${escapeHtml(rm.title)}`);
+    history.push({ role: 'assistant', content: 'Nota deletada: ' + rm.title }); persist();
+    log('Nota deletada: ' + rm.title.slice(0, 80), 'ok');
+    return `NOTA DELETADA: ${rm.title}`;
+  }
   throw new Error('ferramenta desconhecida: ' + name);
 }
 
@@ -2831,7 +3417,7 @@ async function teamFlow(task) {
 /* ───────── TABS / LOG / TOAST / EXPORT ───────── */
 function switchTab(name) {
   $$('.tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
-  ['routines', 'music', 'skills', 'tasks', 'reminders', 'log'].forEach(t => $('#tab-' + t).hidden = t !== name);
+  ['routines', 'music', 'skills', 'tasks', 'reminders', 'log', 'notes', 'extra1', 'extra2'].forEach(t => $('#tab-' + t).hidden = t !== name);
 }
 $$('.tabs button').forEach(b => b.onclick = () => switchTab(b.dataset.tab));
 
@@ -2938,7 +3524,56 @@ $('#importFile').onchange = e => {
   r.readAsText(f);
 };
 
-function renderAll() { renderConvs(); renderReminders(); renderCustomChips(); renderAgents(); renderRoutines(); renderSkills(); renderSideSkills(); renderTasks(); renderLog(); refreshKeyField(); updateConn(); applyBackground(); icons(); }
+/* ───────── SAUDAÇÃO DO DIA (header) ───────── */
+function greetLeadLocal() {
+  const h = new Date().getHours();
+  return 'Olá, ' + (h < 6 ? 'boa madrugada' : h < 12 ? 'bom dia' : h < 18 ? 'boa tarde' : 'boa noite');
+}
+function greetFallback() { return 'dia tranquilo por aqui. Se precisar de algo, é só falar.'; }
+function greetApply(sub) {
+  greetLead = greetLeadLocal();
+  greetSub = sub;
+  if (busyCount === 0) setCoreState(greetLead, greetSub);
+}
+function greetFp(s) { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return String(h); }
+async function bootGreeting() {
+  const day = new Date().toDateString();
+  const cached = store.get('greet', null);
+  const tasks = getTasks().filter(t => !t.done).map(t => t.text);
+  const rems = getReminders().filter(r => !(r.repeat === 'once' && r.done)).map(r => `${r.time} ${r.text}${r.repeat === 'daily' ? ' (todo dia)' : ''}`);
+  const notes = getNotes().slice(0, 6).map(n => n.title + ': ' + (n.text || '').slice(0, 100));
+  const fp = greetFp(tasks.join('|') + '#' + rems.join('|') + '#' + notes.join('#'));
+  const hit = cached && cached.day === day && cached.fp === fp && cached.sub;
+  greetApply(hit ? cached.sub : greetFallback());
+  if (hit) return;
+  try {
+    const ctx = [
+      `Agora: ${new Date().toLocaleString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}.`,
+      `Tarefas pendentes (${tasks.length}): ${tasks.slice(0, 8).join(' | ') || 'nenhuma'}.`,
+      `Lembretes (${rems.length}): ${rems.slice(0, 6).join(' | ') || 'nenhum'}.`,
+      `Notas (${notes.length}): ${notes.join(' | ') || 'nenhuma'}.`
+    ].join('\n');
+    const out = await callLLM([
+      { role: 'system', content: 'Você é o assistente do My OS, um orquestrador local que conhece o dia do usuário. Escreva UMA saudação inicial em pt-BR para o topo do app, no máximo 2 frases e ~220 caracteres, tom gentil, respeitoso, natural e discreto, sem emojis, sem markdown, sem aspas, sem listas, sem travessões. Regras: (1) Não comece com "Olá", a interface já mostra "Olá, bom dia/boa tarde/boa noite". (2) Se houver tarefas pendentes, resuma de forma gentil e curta quantas são e o essencial delas. (3) Inclua os lembretes do dia com horário quando forem relevantes. (4) Olhe as notas e, se alguma aponta algo que o usuário não deve esquecer hoje (um vídeo a gravar, um compromisso, um projeto), mencione isso de forma natural. (5) Nunca copie os dados crus um a um; reescreva com contexto e bom senso. (6) Se não houver nada relevante, diga exatamente: dia tranquilo por aqui. Se precisar de algo, é só falar. (7) Não confirme dados, não dê instruções, não pergunte nada.' },
+      { role: 'user', content: ctx }
+    ], { maxTokens: 140, temperature: 0.6, noTools: true });
+    let sub = String(out || '').trim()
+      .replace(/^["'\s]+|["'\s]+$/g, '')
+      .replace(/\*\*/g, '')
+      .replace(/\s*[—–]+\s*/g, '. ')
+      .replace(/\.{2,}/g, '.')
+      .split('\n')[0].trim().slice(0, 260);
+    if (sub.length < 8) sub = greetFallback();
+    greetApply(sub);
+    store.set('greet', { day, fp, sub });
+    log('Saudação do dia atualizada.', 'info');
+  } catch {
+    greetApply(greetFallback());
+  }
+}
+
+function renderAll() { renderConvs(); renderReminders(); renderCustomChips(); renderAgents(); renderRoutines(); renderSkills(); renderSideSkills(); renderTasks(); renderNotes(); renderLog(); refreshKeyField(); updateConn(); applyBackground(); icons(); }
 renderAll();
 icons();
 askNotify()
+bootGreeting();
