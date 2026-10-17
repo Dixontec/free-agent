@@ -39,10 +39,37 @@ Principles:
 - **10 built-in skills**: deep web research, news digest, morning routine, YouTube player, music & focus, app opener, smart summarizer, Linux automation, multi-provider search, web browser — plus create your own.
 - **Free music, no key**: search Internet Archive + Wikimedia, play instantly or download MP3. Local player with queue, authorized folder, chat commands.
 - **Coding agent (plan/build)**: read, search, edit and create project files with diff preview, per-tool permissions, undo, workspace jailed to the authorized folder, optional local shell via `bridge.py`.
+- **Mascote Agent** — an animated companion face (blinking / sleepy) on its own full-screen page. The mascot sleeps until you connect an AI provider, then wakes up. Fully renameable (Harry, your pet, anything); the name replaces "FREE" in the top bar (can be toggled off in Settings).
+- **AI Life Card** — a draggable info card with the mascot's awakening date + time + moon phase, every model you connected (the list grows as you change models), and **Life Tokens**: a lifetime counter + progress bar of every token spent through the app (any provider, summed). Stored in your browser's `localStorage` — survives app updates and backups. Renaming the mascot intentionally wipes the card and starts a new life cycle.
 - **Multi-language UI** — full interface in **Portuguese (BR)**, **English** and **Spanish**; switch anytime in Settings → Appearance, with dynamic greetings and agent prompts in the chosen language.
 - **Premium themes & backgrounds** — Light · Dark · Glass with a refined, premium look, plus a background gallery with high-resolution organic paper-cut artwork (green and pink) as default first-run theme.
-- **3 premium Apple-style themes** (Light · Dark · Glass), Three.js 3D background + aurora, JARVIS-style Core with live activity windows, system monitor, clock + weather, reminders, notes, full log + agent traces, JSON export/import without secrets.
+- **Notes & conversations readable by the AI** — the agent reads your saved notes and past conversations (`list_notes`, `list_convs`, `read_conv`) to answer with real context; full-screen note viewer with one-click copy.
+- Three.js 3D background + aurora, system monitor, clock + weather, reminders, notes, full log + agent traces, JSON export/import without secrets.
 - **Automated eval**: `node eval/run-eval.mjs` (logic + real loop) + in-browser self-test `?eval=1` against the live app, fully isolated from your data.
+
+### The Mascote Agent philosophy
+
+Free Agent is not a cold console — it's a companion you own. The **Mascote Agent** gives your local AI a face and a life story:
+
+1. **It sleeps until it's real** — with no provider connected the mascot is gray and dozing: nothing runs, nothing is invented. Connect a free provider and it wakes up.
+2. **It has a birthday** — the AI Life Card records the exact date, time and moon phase of its awakening, plus the first model that brought it to life.
+3. **It grows with you** — every token you spend (Groq, OpenAI, Gemini, Anthropic, local…) adds to its Life Tokens bar. Change models and the card keeps the full lineage.
+4. **It's yours** — give it a name and it owns the top bar. Edit the name and you consciously start a new life cycle. All state lives in your browser only.
+
+### Free providers & getting your API keys
+
+You don't need to pay to use Free Agent:
+
+- **Groq (free, recommended)** — free tier with very fast open models: [console.groq.com](https://console.groq.com) → **API Keys** → **Create** → copy → paste in **Settings → Connection**.
+- **OpenAI** — [platform.openai.com](https://platform.openai.com) → API keys.
+- **Gemini** — [aistudio.google.com](https://aistudio.google.com) → **Get API key**.
+- **Anthropic** — [console.anthropic.com](https://console.anthropic.com) → API keys.
+- **100% local, no key** — [Ollama](https://ollama.com) (`ollama serve`) or LM Studio (Server → Start) on `localhost`.
+
+Inside the app: **Settings → Connection → “Where to get keys”** opens the same step-by-step guide.
+
+> **We never receive your API keys.** Free Agent has no backend and no server of ours — keys are saved only in your browser's `localStorage`, and are sent only from your machine directly to the official endpoint of the provider you chose (e.g. `api.groq.com`). They never pass through us, proxies, logs, traces or backups.
+
 
 ### Install (2 minutes)
 
@@ -76,6 +103,7 @@ Guides: [`docs/en/usage.md`](docs/en/usage.md) · [`docs/en/routines.md`](docs/e
 
 ### Security & privacy
 
+- **We never receive your API keys — zero.** Free Agent has no backend and no server of ours; nothing is ever sent to us.
 - Keys live in `localStorage` (`nexus:keys`) — browser-only storage. Export goes through `stripSecrets()`; keys become `***` and `baseUrl` is removed.
 - Keys are sent **only** to the official API endpoint of the provider you configured (e.g. `api.groq.com`), in the `Authorization` header. Never to proxies, logs, traces or backups.
 - `open_site` always asks for confirmation. Off-allowlist hosts require explicit approval.
@@ -148,10 +176,37 @@ Princípios:
 - **10 skills ativas por padrão**: pesquisa web profunda, digest de notícias, rotina da manhã, YouTube player, música & foco, abridor de apps, resumo inteligente, automação Linux, busca multi-provedor, navegador web — e você pode criar as suas.
 - **Música livre sem chave**: busca em Internet Archive + Wikimedia, toca na hora ou baixa MP3. Player local com fila, pasta autorizada, comandos pelo chat.
 - **Coding agent (plan/build)**: leia, busque, edite e crie arquivos do projeto com diff preview, permissões por ferramenta, undo, workspace restrito à pasta autorizada e shell local opcional via `bridge.py`.
+- **Mascote Agent** — um rostinho animado (piscando / sonolento) em tela cheia que é o companheiro do seu agente. Dorme enquanto não há provedor conectado e acorda quando você conecta. Pode ser renomeado (Harry, seu pet, o que quiser) e o nome substitui o "FREE" na barra superior (com opção de desligar nas Configurações).
+- **Ai Life Card** — cartão de informações arrastável com a data, hora e fase da lua do despertar do mascote, todos os modelos que você conectou (a lista cresce a cada troca) e os **Tokens de Vida**: um contador vitalício + barra de progresso de todos os tokens gastos pela aplicação (qualquer provedor, somados). Fica no `localStorage` do seu navegador — sobrevive a atualizações e backups. Renomear o mascote zera o cartão e inicia um novo ciclo de vida.
 - **Interface multi-idioma** — interface completa em **português (BR)**, **inglês** e **espanhol**; troque a qualquer momento em Configurações → Aparência, com saudações dinâmicas e prompts do agente no idioma escolhido.
 - **Temas e fundos premium** — Light · Dark · Glass com visual refinado e mais premium, além de uma galeria de fundos com arte orgânica paper-cut em alta resolução (verde e rosa) como tema padrão na primeira abertura.
-- **3 temas Apple premium** (Light · Dark · Glass), fundo 3D Three.js + aurora, Núcleo estilo JARVIS com janelas de atividade em tempo real, monitor de sistema, relógio + clima, lembretes, notas, log completo + traces do agente, export/import JSON sem segredos.
+- **Notas e conversas legíveis pela IA** — o agente lê suas notas salvas e conversas anteriores (`list_notes`, `list_convs`, `read_conv`) para responder com contexto real; visualizador de notas em tela cheia com cópia em 1 clique.
+- Fundo 3D Three.js + aurora, monitor de sistema, relógio + clima, lembretes, notas, log completo + traces do agente, export/import JSON sem segredos.
 - **Eval automatizado**: `node eval/run-eval.mjs` (lógica + loop real) + self-test no navegador `?eval=1` contra o app vivo, com isolamento total dos seus dados.
+
+### A filosofia do Mascote Agent
+
+O Free Agent não é um console frio — é um companheiro que é seu. O **Mascote Agent** dá um rosto e uma história de vida para a sua IA local:
+
+1. **Ele dorme até ser real** — sem provedor conectado, o mascote fica acinzentado e dorminhoco: nada roda, nada é inventado. Conecte um provedor grátis e ele acorda.
+2. **Ele tem aniversário** — o Ai Life Card registra a data, hora e fase lua exatas do despertar, além do primeiro modelo que o trouxe à vida.
+3. **Ele cresce com você** — cada token gasto (Groq, OpenAI, Gemini, Anthropic, local…) soma na barra de Tokens de Vida. Troque de modelo e o cartão mantém a linhagem completa.
+4. **Ele é seu** — dê um nome e ele assume a barra superior. Editar o nome é conscientemente iniciar um novo ciclo de vida. Todo o estado fica só no seu navegador.
+
+### Provedores gratuitos e como obter suas chaves API
+
+Não precisa pagar para usar o Free Agent:
+
+- **Groq (grátis, recomendado)** — tier grátis com modelos open muito rápidos: [console.groq.com](https://console.groq.com) → **API Keys** → **Create** → copiar → colar em **Configurações → Conexão**.
+- **OpenAI** — [platform.openai.com](https://platform.openai.com) → API keys.
+- **Gemini** — [aistudio.google.com](https://aistudio.google.com) → **Get API key**.
+- **Anthropic** — [console.anthropic.com](https://console.anthropic.com) → API keys.
+- **100% local, sem chave** — [Ollama](https://ollama.com) (`ollama serve`) ou LM Studio (Server → Start) em `localhost`.
+
+Dentro da aplicação: **Configurações → Conexão → “Onde conseguir chaves”** abre o mesmo passo a passo.
+
+> **Nós nunca recebemos suas chaves API.** O Free Agent não tem backend nenhum, nem servidor nosso — as chaves ficam apenas no `localStorage` do seu navegador e são enviadas da sua máquina direto ao endpoint oficial do provedor que você escolheu (ex.: `api.groq.com`). Elas nunca passam por nós, por proxies, logs, traces ou backups.
+
 
 ### Instalação (2 minutos)
 
@@ -185,6 +240,7 @@ Guias: [`docs/pt-BR/uso.md`](docs/pt-BR/uso.md) · [`docs/pt-BR/rotinas.md`](doc
 
 ### Segurança e privacidade
 
+- **Nós nunca recebemos suas chaves API — zero.** O Free Agent não tem backend nenhum nem servidor nosso; nada jamais é enviado para nós.
 - Chaves ficam em `localStorage` (`nexus:keys`), só no seu navegador. Export usa `stripSecrets()` — chaves viram `***` e `baseUrl` é removido.
 - Chaves são enviadas **apenas** ao endpoint oficial do provedor configurado (ex.: `api.groq.com`), no header `Authorization`. Nunca para proxies, logs, traces ou backups.
 - `open_site` sempre pede confirmação. Hosts fora do allowlist exigem aprovação explícita.

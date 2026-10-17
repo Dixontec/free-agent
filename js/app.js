@@ -45,9 +45,96 @@ setTheme(store.get('theme', 'glass'));
 /* ───────── NÚCLEO (HUD estilo JARVIS) ───────── */
 let busyCount = 0, unseenWins = 0;
 function coreOverlayOpen() { return !$('#coreOverlay').hidden; }
-function openCore() { $('#coreOverlay').hidden = false; unseenWins = 0; updateBadge(); icons(); window.__neuralOn = true; if (window.__neuralBuild) window.__neuralBuild(); }
+/* ───────── MASCOTE AGENT ───────── */
+function getMascotName() { return String(store.get('mascotName', '') || '').trim(); }
+function mascotNameOn() { return !!store.get('mascotShowName', true); }
+function applyBrand() {
+  const top = $('#brandTop');
+  if (!top) return;
+  top.textContent = (mascotNameOn() && getMascotName()) || 'FREE';
+}
+function agentConnected() {
+  if (cfg.provider === 'ollama' || cfg.provider === 'lmstudio') return true;
+  return Object.values(keys).some(v => v && String(v).trim());
+}
+function getBirth() { return store.get('agentBirth', null); }
+function noteBirth() {
+  if (getBirth()) return;
+  store.set('agentBirth', { at: new Date().toISOString(), provider: cfg.provider, model: cfg.model });
+  noteModelUsed();
+}
+function noteModelUsed() {
+  if (!agentConnected()) return;
+  const label = (PROVIDERS[cfg.provider]?.label || cfg.provider) + ' · ' + (cfg.model || '');
+  const list = store.get('agentModels', []) || [];
+  if (!list.includes(label)) { list.push(label); store.set('agentModels', list); }
+}
+function moonPhaseInfo(date) {
+  const synodic = 29.530588853;
+  const known = Date.UTC(2000, 0, 6, 18, 14) / 86400000;
+  const age = (((date.getTime() / 86400000 - known) % synodic) + synodic) % synodic;
+  const names = {
+    'pt-BR': ['Lua nova', 'Crescente', 'Quarto crescente', 'Gibbosa crescente', 'Lua cheia', 'Gibbosa minguante', 'Quarto minguante', 'Minguante'],
+    es: ['Luna nueva', 'Creciente', 'Cuarto creciente', 'Gibosa creciente', 'Luna llena', 'Gibosa menguante', 'Cuarto menguante', 'Menguante'],
+    en: ['New moon', 'Waxing crescent', 'First quarter', 'Waxing gibbous', 'Full moon', 'Waning gibbous', 'Last quarter', 'Waning crescent']
+  };
+  const idx = Math.floor((age / synodic) * 8 + 0.5) % 8;
+  const lang = PL() === 'en' ? 'en' : PL() === 'es' ? 'es' : 'pt-BR';
+  return { idx, name: names[lang][idx] };
+}
+function moonPhaseSVG(idx) {
+  const r = 8, cx = 10, cy = 10;
+  const lit = '#e8eef5', dark = 'rgba(148,163,184,.35)';
+  let litPath;
+  switch (idx) {
+    case 0: litPath = ''; break;
+    case 4: litPath = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${lit}"/>`; break;
+    case 2: litPath = `<path d="M${cx},${cy - r} A${r},${r} 0 0 1 ${cx},${cy + r} Z" fill="${lit}"/>`; break;
+    case 6: litPath = `<path d="M${cx},${cy - r} A${r},${r} 0 0 0 ${cx},${cy + r} Z" fill="${lit}"/>`; break;
+    case 1: litPath = `<path d="M${cx},${cy - r} A${r},${r} 0 0 1 ${cx},${cy + r} A${r * 0.55},${r} 0 0 0 ${cx},${cy - r} Z" fill="${lit}"/>`; break;
+    case 3: litPath = `<path d="M${cx},${cy - r} A${r},${r} 0 0 1 ${cx},${cy + r} A${r * 0.45},${r} 0 0 0 ${cx},${cy - r} Z" fill="${lit}"/>`; break;
+    case 5: litPath = `<path d="M${cx},${cy - r} A${r},${r} 0 0 0 ${cx},${cy + r} A${r * 0.45},${r} 0 0 1 ${cx},${cy - r} Z" fill="${lit}"/>`; break;
+    case 7: litPath = `<path d="M${cx},${cy - r} A${r},${r} 0 0 0 ${cx},${cy + r} A${r * 0.55},${r} 0 0 1 ${cx},${cy - r} Z" fill="${lit}"/>`; break;
+  }
+  return `<svg class="moon-ico" viewBox="0 0 20 20" width="15" height="15" aria-hidden="true"><circle cx="${cx}" cy="${cy}" r="${r}" fill="${dark}"/>${litPath}<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="rgba(232,238,245,.45)" stroke-width="1"/></svg>`;
+}
+function addAgentTokens(n) {
+  if (!n || n <= 0) return;
+  const t = (+store.get('agentTokens', 0) || 0) + Math.round(n);
+  store.set('agentTokens', t);
+}
+function renderMascot() {
+  const face = $('#botFace');
+  if (!face) return;
+  const on = agentConnected();
+  face.classList.toggle('sleepy', !on);
+  const sl = $('#mascotSleepy'), st = $('#mascotStats');
+  if (sl) sl.hidden = on;
+  if (st) st.hidden = !on || st.dataset.userClosed === '1';
+  if (!on) return;
+  const loc = PL() === 'en' ? 'en-US' : PL() === 'es' ? 'es-ES' : 'pt-BR';
+  const b = getBirth();
+  const nm = $('#msName');
+  if (nm) nm.textContent = getMascotName() || 'FREE';
+  const aw = $('#msAwakened');
+  if (aw) {
+    if (b) {
+      const d = new Date(b.at), mp = moonPhaseInfo(d);
+      aw.innerHTML = `<span class="ms-aw-date">${escapeHtml(d.toLocaleString(loc, { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }))}</span> <span class="ms-aw-moon">${moonPhaseSVG(mp.idx)}${escapeHtml(mp.name)}</span>`;
+    } else aw.textContent = '—';
+  }
+  const ul = $('#msModels');
+  if (ul) {
+    const models = (store.get('agentModels', []) || []).slice(-6).reverse();
+    ul.innerHTML = models.length ? models.map(m => `<li>${escapeHtml(m)}</li>`).join('') : '<li>—</li>';
+  }
+  const tot = +store.get('agentTokens', 0) || 0;
+  const tk = $('#msTokens'), bar = $('#msBar');
+  if (tk) tk.textContent = tot.toLocaleString(loc);
+  if (bar) bar.style.width = Math.min(100, Math.log10(Math.max(10, tot)) / 6 * 100).toFixed(1) + '%';
+}
+function openCore() { $('#coreOverlay').hidden = false; unseenWins = 0; updateBadge(); icons(); const st = $('#mascotStats'); if (st) st.dataset.userClosed = '0'; renderMascot(); window.__neuralOn = true; if (window.__neuralBuild) window.__neuralBuild(); }
 function closeCore() { $('#coreOverlay').hidden = true; window.__neuralOn = false; const t = $('#eyesTrack'); if (t) t.style.transform = ''; }
-$('#btnCore').onclick = openCore;
 $('#brandCore').onclick = openCore;
 $('#coreMini').onclick = openCore;
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeCore(); });
@@ -65,6 +152,7 @@ $('#coreOverlay').addEventListener('mouseleave', () => { const t = $('#eyesTrack
 $('#coreOverlay').addEventListener('click', closeCore);
 function updateBadge() {
   const b = $('#coreBadge');
+  if (!b) return;
   b.hidden = unseenWins === 0;
   b.textContent = unseenWins > 9 ? '9+' : unseenWins;
 }
@@ -230,13 +318,13 @@ $('#temperature').value = cfg.temperature; $('#tempVal').textContent = cfg.tempe
 $('#maxTokens').value = cfg.maxTokens; $('#tokVal').textContent = cfg.maxTokens;
 $('#temperature').oninput = e => { $('#tempVal').textContent = e.target.value; cfg.temperature = +e.target.value; store.set('cfg', cfg); };
 $('#maxTokens').oninput = e => { $('#tokVal').textContent = e.target.value; cfg.maxTokens = +e.target.value; store.set('cfg', cfg); };
-$('#provider').onchange = () => { cfg.provider = $('#provider').value; cfg.model = PROVIDERS[cfg.provider].models[0]; store.set('cfg', cfg); refreshModels(); refreshKeyField(); updateConn(); };
+$('#provider').onchange = () => { cfg.provider = $('#provider').value; cfg.model = PROVIDERS[cfg.provider].models[0]; store.set('cfg', cfg); refreshModels(); refreshKeyField(); noteModelUsed(); updateConn(); };
 $('#model').onchange = async () => {
   let v = $('#model').value;
   if (v === '__custom') { v = (await uiPrompt('Modelo personalizado', cfg.model, 'ex.: llama-3.3-70b-versatile')) || cfg.model;
     const _all = store.get('customModels', {}); const _p = $('#provider').value;
     _all[_p] = [...new Set([...(_all[_p] || []), v])]; store.set('customModels', _all); refreshModels(); }
-  cfg.model = v; store.set('cfg', cfg); $('#model').value = v; updateConn();
+  cfg.model = v; store.set('cfg', cfg); $('#model').value = v; noteModelUsed(); updateConn();
 };
 $('#toggleKey').onclick = () => {
   const show = $('#apiKey').type === 'password';
@@ -257,6 +345,7 @@ function saveCfg(silent) {
   keys[$('#provider').value] = $('#apiKey').value.trim();
   cfg.baseUrl = $('#baseUrl').value.trim(); cfg.provider = $('#provider').value; cfg.model = $('#model').value;
   store.set('keys', keys); store.set('cfg', cfg);
+  if (keys[cfg.provider] || cfg.provider === 'ollama' || cfg.provider === 'lmstudio') { noteBirth(); noteModelUsed(); }
   if (!silent) toast('save', '<b>Configuração salva</b> localmente.');
   updateConn();
 }
@@ -302,6 +391,7 @@ function updateConn() {
   if (qp) qp.innerHTML = `${ic('cpu')}<b>${PROVIDERS[p].label}</b>`;
   icons();
   try { paintCtx(); } catch {}
+  try { renderMascot(); } catch {}
 }
 
 /* ───────── CHAMADAS ÀS APIs ───────── */
@@ -443,6 +533,67 @@ try {
       bootGreeting();
       toast('languages', 'Idioma: <b>' + _ul.value + '</b>');
     };
+  }
+} catch {}
+
+/* nome do mascote — Ai Life Card: renomear depois de definido zera o registro */
+try {
+  const _mn = $('#mascotNameInput'), _mr = $('#mascotReset');
+  const wipeLife = () => { store.set('agentBirth', null); store.set('agentModels', []); store.set('agentTokens', 0); const st = $('#mascotStats'); if (st) { st.style.position = ''; st.style.left = st.style.top = st.style.right = st.style.bottom = st.style.margin = st.style.zIndex = ''; st.dataset.userClosed = '0'; } };
+  const confirmRename = async (next) => {
+    const prev = getMascotName();
+    if (!prev || prev === next) return true;
+    return await uiConfirm('Editar nome do mascote', 'Editar o nome zera o registro completo do Ai Life Card (despertar, modelos e tokens). Continuar?', 'Editar e zerar');
+  };
+  if (_mn) {
+    _mn.value = getMascotName();
+    _mn.onchange = async () => {
+      const next = _mn.value.trim();
+      if (!(await confirmRename(next))) { _mn.value = getMascotName(); return; }
+      if (getMascotName() && getMascotName() !== next) wipeLife();
+      store.set('mascotName', next);
+      applyBrand(); renderMascot();
+      toast('bot', next ? 'Mascote renomeado para <b>' + escapeHtml(next) + '</b> — registro reiniciado.' : 'Nome do mascote resetado para <b>FREE</b>.');
+    };
+  }
+  if (_mr) _mr.onclick = async () => {
+    if (!(await confirmRename(''))) { if (_mn) _mn.value = getMascotName(); return; }
+    if (getMascotName()) wipeLife();
+    if (_mn) _mn.value = '';
+    store.set('mascotName', '');
+    applyBrand(); renderMascot();
+    toast('rotate-ccw', 'Nome resetado para <b>FREE</b>.');
+  };
+  const _msn = $('#mascotShowName');
+  if (_msn) {
+    _msn.checked = mascotNameOn();
+    _msn.onchange = () => { store.set('mascotShowName', _msn.checked); applyBrand(); };
+  }
+} catch {}
+
+/* card do mascote: arrastável + fechar (X) */
+try {
+  const _card = $('#mascotStats'), _close = $('#mascotCardClose');
+  if (_card) {
+    let _drag = false, _ox = 0, _oy = 0;
+    _card.addEventListener('mousedown', e => {
+      if (e.target.closest('.ms-close')) return;
+      _drag = true;
+      const r = _card.getBoundingClientRect();
+      _card.style.position = 'fixed';
+      _card.style.left = r.left + 'px'; _card.style.top = r.top + 'px';
+      _card.style.right = 'auto'; _card.style.bottom = 'auto'; _card.style.margin = '0'; _card.style.zIndex = '90';
+      _ox = e.clientX - r.left; _oy = e.clientY - r.top;
+      e.preventDefault();
+    });
+    document.addEventListener('mousemove', e => {
+      if (!_drag) return;
+      _card.style.left = Math.max(0, Math.min(innerWidth - 80, e.clientX - _ox)) + 'px';
+      _card.style.top = Math.max(0, Math.min(innerHeight - 40, e.clientY - _oy)) + 'px';
+    });
+    document.addEventListener('mouseup', () => { _drag = false; });
+    _card.addEventListener('click', e => e.stopPropagation());
+    if (_close) _close.onclick = e => { e.stopPropagation(); _card.dataset.userClosed = '1'; _card.hidden = true; };
   }
 } catch {}
 
@@ -640,7 +791,6 @@ function smpPick(i) {
   smpClose();
   inp.dispatchEvent(new Event('input'));
 }
-$('#btnNewChat').onclick = () => { newConv(); toast('plus', 'Nova conversa iniciada.'); };
 $('#btnNewConv').onclick = () => { newConv(); $('#input').focus(); };
 $('#btnQuickNew').onclick = () => { newConv(); toast('plus', 'Nova conversa iniciada.'); $('#input').focus(); };
 $('#quickChips')?.addEventListener('click', e => {
@@ -811,7 +961,7 @@ $('#composer').addEventListener('submit', async e => {
   /* ── v2.1: executa → verifica conclusão → corrige pendência → entrega ── */
   if (window.__runReAct) {
     try {
-      const TOOL_LABEL = { web_search: 'Buscando fontes', web_open: 'Lendo página', open_site: 'Abrindo site', run_skill: 'Executando skill', music_search: 'Buscando música livre', music_download: 'Baixando MP3', music_play: 'Tocando música', create_task: 'Criando tarefa', list_tasks: 'Lendo tarefas', complete_task: 'Concluindo tarefa', delete_task: 'Deletando tarefa', create_note: 'Criando nota', list_notes: 'Lendo notas', edit_note: 'Editando nota', delete_note: 'Deletando nota', news: 'Lendo notícias', code_read: 'Lendo arquivo', code_list: 'Listando pasta', code_glob: 'Buscando arquivos', code_grep: 'Buscando texto', code_write: 'Escrevendo arquivo', code_edit: 'Editando arquivo', code_bash: 'Executando comando', code_undo: 'Desfazendo' };
+      const TOOL_LABEL = { web_search: 'Buscando fontes', web_open: 'Lendo página', open_site: 'Abrindo site', run_skill: 'Executando skill', music_search: 'Buscando música livre', music_download: 'Baixando MP3', music_play: 'Tocando música', create_task: 'Criando tarefa', list_tasks: 'Lendo tarefas', complete_task: 'Concluindo tarefa', delete_task: 'Deletando tarefa', create_note: 'Criando nota', list_notes: 'Lendo notas', edit_note: 'Editando nota', delete_note: 'Deletando nota', list_convs: 'Listando conversas', read_conv: 'Lendo conversa', news: 'Lendo notícias', code_read: 'Lendo arquivo', code_list: 'Listando pasta', code_glob: 'Buscando arquivos', code_grep: 'Buscando texto', code_write: 'Escrevendo arquivo', code_edit: 'Editando arquivo', code_bash: 'Executando comando', code_undo: 'Desfazendo' };
       const runAw = agentWin({ icon: 'bot', title: 'Agente · ' + text.slice(0, 60), body: `<div class="awline">${ic('circle-dot')}<span>Iniciando: <b>${escapeHtml(text.slice(0, 100))}</b></span></div>` });
       const execToolReal = async (name, arg) => {
         const label = TOOL_LABEL[name] || name;
@@ -904,7 +1054,7 @@ $('#composer').addEventListener('submit', async e => {
     const tool = parseToolCall(out);
     let via = `${PROVIDERS[cfg.provider].label} · ${escapeHtml(cfg.model)}${skill ? ' · skill ' + escapeHtml(skill.title) : ''}`;
     if (tool) {
-      const TOOL_PT = { web_search: 'Buscando fontes', web_open: 'Lendo página', open_site: 'Abrindo site', run_skill: 'Executando skill', music_search: 'Buscando música', music_download: 'Baixando MP3', music_play: 'Tocando música', create_task: 'Criando tarefa', list_tasks: 'Lendo tarefas', complete_task: 'Concluindo tarefa', delete_task: 'Deletando tarefa', create_note: 'Criando nota', list_notes: 'Lendo notas', edit_note: 'Editando nota', delete_note: 'Deletando nota', news: 'Lendo notícias', code_read: 'Lendo arquivo', code_list: 'Listando pasta', code_glob: 'Buscando arquivos', code_grep: 'Buscando texto', code_write: 'Escrevendo arquivo', code_edit: 'Editando arquivo', code_bash: 'Executando comando', code_undo: 'Desfazendo' };
+      const TOOL_PT = { web_search: 'Buscando fontes', web_open: 'Lendo página', open_site: 'Abrindo site', run_skill: 'Executando skill', music_search: 'Buscando música', music_download: 'Baixando MP3', music_play: 'Tocando música', create_task: 'Criando tarefa', list_tasks: 'Lendo tarefas', complete_task: 'Concluindo tarefa', delete_task: 'Deletando tarefa', create_note: 'Criando nota', list_notes: 'Lendo notas', edit_note: 'Editando nota', delete_note: 'Deletando nota', list_convs: 'Listando conversas', read_conv: 'Lendo conversa', news: 'Lendo notícias', code_read: 'Lendo arquivo', code_list: 'Listando pasta', code_glob: 'Buscando arquivos', code_grep: 'Buscando texto', code_write: 'Escrevendo arquivo', code_edit: 'Editando arquivo', code_bash: 'Executando comando', code_undo: 'Desfazendo' };
       const tlabel = TOOL_PT[tool.name] || tool.name;
       setCoreState(tlabel, `${tool.name}: ${tool.arg.slice(0, 90)}`);
       const twin = coreWindow({ icon: 'globe', title: tlabel, body: `<b>${escapeHtml(tool.name)}</b> · ${escapeHtml(tool.arg.slice(0, 120))}` });
@@ -1784,6 +1934,15 @@ function openNoteModal(n) {
   icons();
 }
 $('#noteModalClose').onclick = () => { $('#noteModal').hidden = true; };
+$('#noteModalCopy').onclick = async () => {
+  const t = $('#noteModalBody').textContent || '';
+  if (!t) return;
+  try { await navigator.clipboard.writeText(t); toast('copy', 'Nota copiada.'); }
+  catch {
+    try { const ta = document.createElement('textarea'); ta.value = t; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); toast('copy', 'Nota copiada.'); }
+    catch { toast('x', 'Não consegui copiar.'); }
+  }
+};
 $('#noteModal').addEventListener('click', e => { if (e.target === e.currentTarget) $('#noteModal').hidden = true; });
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') { const m = $('#noteModal'); if (m && !m.hidden) m.hidden = true; }
@@ -2573,8 +2732,10 @@ function trackLLM(msgs, outText) {
   const est = Math.round(chars / 4);
   const real = pendingUsage && (pendingUsage.in + pendingUsage.out) > 0 ? pendingUsage.in + pendingUsage.out : 0;
   pendingUsage = null;
-  ctxUsed += real || est;
+  const spent = real || est;
+  ctxUsed += spent;
   store.set('ctxUsed', ctxUsed);
+  addAgentTokens(spent);
   paintCtx();
 }
 $('#ctxBar').onclick = async () => {
@@ -2843,11 +3004,13 @@ try {
 paintWorkDir();
 
 /* ───────── NAVEGADOR NEXUS (ferramentas web p/ qualquer modelo) ───────── */
-const TOOLS_SYS = `\n\n[FERRAMENTAS — web + música local. REGRA DE OURO: se dá p/ responder direto, RESPONDA DIRETO sem tool. Só use tool quando pedir dado externo/ação (notícia atual, abrir site, criar/ler tarefa, tocar/baixar). NUNCA use JSON {"name":...} — só o formato <tool>. Quando precisar, responda SOMENTE com 1 chamada neste formato exato:\n<tool name="web_search">sua consulta</tool>\n<tool name="web_open">https://url-completa</tool>\n<tool name="open_site">youtube | gmail | github | nome do site ou URL</tool> — use SEMPRE que pedir ABRIR/VER/ACESSAR.\n<tool name="music_search">termo</tool> — busca PRIMEIRO na biblioteca local do usuário (upada no player à esquerda), depois Archive/Wiki. Use p/ "toca X".\n<tool name="music_download">termo</tool> — baixa o MP3 do 1º resultado.\n<tool name="create_task">texto da tarefa</tool> — use SEMPRE que pedir CRIAR/ADICIONAR tarefa; o sistema salva na aba Tarefas.\n<tool name="list_tasks"></tool> — use SEMPRE que perguntar SE TEM tarefa/pendência/o que falta; o sistema devolve a lista real. Responda SÓ com os dados retornados.\n<tool name="complete_task">texto (ou parte) da tarefa</tool> — use SEMPRE que pedir CONCLUIR/MARCAR COMO FEITA/TERMINAR tarefa; o sistema marca como concluída na aba Tarefas.\n<tool name="delete_task">texto (ou parte) da tarefa</tool> — use SEMPRE que pedir DELETAR/APAGAR/REMOVER tarefa; o sistema remove da aba Tarefas.\n<tool name="create_note">{"title":"Título","text":"conteúdo"}</tool> — use SEMPRE que pedir CRIAR/ANOTAR/ANOTE nota; o sistema salva na aba Notas.\n<tool name="list_notes"></tool> — use SEMPRE que perguntar SE TEM nota/minhas notas; devolve a lista real.\n<tool name="edit_note">{"match":"trecho da nota","text":"novo conteúdo"}</tool> — use quando pedir EDITAR/ATUALIZAR/MUDAR nota.\n<tool name="delete_note">trecho da nota ou nº</tool> — use quando pedir DELETAR/APAGAR/REMOVER nota.\n<tool name="run_skill">slug-da-skill</tool>.\nMúsica: se o usuário citar nome da biblioteca local, use music_search com esse nome — o sistema já prioriza locais. Controles (pausa/próxima) são locais, apenas confirme.\nNUNCA explique passos para abrir/pesquisar/tocar: invoque a ferramenta e deixe o sistema executar.\nO sistema executa e devolve o resultado; aí responda em português citando fontes/links.]\n\n[CODING AGENT — arquivos do projeto, só quando pedir criar/editar/ler código. Workspace = pasta autorizada em Configurações → Coding.\n<tool name="code_read">{"path":"src/app.js","offset":0,"limit":120}</tool> — lê arquivo (offset/limit p/ grandes). Leia antes de editar.\n<tool name="code_list">{"path":"src"}</tool> — lista pasta ({} = raiz).\n<tool name="code_glob">{"pattern":"src/**/*.js"}</tool> — acha arquivos (*, **, ?).\n<tool name="code_grep">{"pattern":"TODO|FIXME","include":"*.js"}</tool> — busca texto (regex) no projeto.\n<tool name="code_write">{"path":"src/novo.js","content":"...código completo..."}</tool> — cria/sobrescreve o arquivo INTEIRO (cria pastas). P/ novo ou reescrita grande. Pula se idêntico.\n<tool name="code_edit">{"path":"src/app.js","old_string":"trecho exato","new_string":"novo"}</tool> — troca precisa; old_string deve existir exatamente. P/ mudança pequena. "replace_all":true p/ todas.\n<tool name="code_bash">{"cmd":"npm test","timeout_ms":60000}</tool> — shell no projeto (exige bridge.py + permissão).\nRegras: JSON válido na tag; nunca escreva o literal </tool> dentro de content; escrita pode pedir confirmação com diff (ask) ou ser negada (modo Plan/deny); Desfazer reverte a última mudança.
+const TOOLS_SYS = `\n\n[FERRAMENTAS — web + música local. REGRA DE OURO: se dá p/ responder direto, RESPONDA DIRETO sem tool. Só use tool quando pedir dado externo/ação (notícia atual, abrir site, criar/ler tarefa, tocar/baixar). NUNCA use JSON {"name":...} — só o formato <tool>. Quando precisar, responda SOMENTE com 1 chamada neste formato exato:\n<tool name="web_search">sua consulta</tool>\n<tool name="web_open">https://url-completa</tool>\n<tool name="open_site">youtube | gmail | github | nome do site ou URL</tool> — use SEMPRE que pedir ABRIR/VER/ACESSAR.\n<tool name="music_search">termo</tool> — busca PRIMEIRO na biblioteca local do usuário (upada no player à esquerda), depois Archive/Wiki. Use p/ "toca X".\n<tool name="music_download">termo</tool> — baixa o MP3 do 1º resultado.\n<tool name="create_task">texto da tarefa</tool> — use SEMPRE que pedir CRIAR/ADICIONAR tarefa; o sistema salva na aba Tarefas.\n<tool name="list_tasks"></tool> — use SEMPRE que perguntar SE TEM tarefa/pendência/o que falta; o sistema devolve a lista real. Responda SÓ com os dados retornados.\n<tool name="complete_task">texto (ou parte) da tarefa</tool> — use SEMPRE que pedir CONCLUIR/MARCAR COMO FEITA/TERMINAR tarefa; o sistema marca como concluída na aba Tarefas.\n<tool name="delete_task">texto (ou parte) da tarefa</tool> — use SEMPRE que pedir DELETAR/APAGAR/REMOVER tarefa; o sistema remove da aba Tarefas.\n<tool name="create_note">{"title":"Título","text":"conteúdo"}</tool> — use SEMPRE que pedir CRIAR/ANOTAR/ANOTE nota; o sistema salva na aba Notas.\n<tool name="list_notes"></tool> — use SEMPRE que perguntar SE TEM nota/minhas notas/O QUE ANOTEI/conteúdo de nota; devolve a lista real COM texto. Responda SÓ com os dados retornados.\n<tool name="edit_note">{"match":"trecho da nota","text":"novo conteúdo"}</tool> — use quando pedir EDITAR/ATUALIZAR/MUDAR nota.\n<tool name="delete_note">trecho da nota ou nº</tool> — use quando pedir DELETAR/APAGAR/REMOVER nota.
+<tool name="list_convs"></tool> — use quando pedir ler/ver conversas anteriores; devolve ids e títulos.
+<tool name="read_conv">{"match":"trecho do título ou id"}</tool> — use quando pedir achar informação em conversa antiga / ler conversa específica; devolve as mensagens.\n<tool name="run_skill">slug-da-skill</tool>.\nMúsica: se o usuário citar nome da biblioteca local, use music_search com esse nome — o sistema já prioriza locais. Controles (pausa/próxima) são locais, apenas confirme.\nNUNCA explique passos para abrir/pesquisar/tocar: invoque a ferramenta e deixe o sistema executar.\nO sistema executa e devolve o resultado; aí responda em português citando fontes/links.]\n\n[CODING AGENT — arquivos do projeto, só quando pedir criar/editar/ler código. Workspace = pasta autorizada em Configurações → Coding.\n<tool name="code_read">{"path":"src/app.js","offset":0,"limit":120}</tool> — lê arquivo (offset/limit p/ grandes). Leia antes de editar.\n<tool name="code_list">{"path":"src"}</tool> — lista pasta ({} = raiz).\n<tool name="code_glob">{"pattern":"src/**/*.js"}</tool> — acha arquivos (*, **, ?).\n<tool name="code_grep">{"pattern":"TODO|FIXME","include":"*.js"}</tool> — busca texto (regex) no projeto.\n<tool name="code_write">{"path":"src/novo.js","content":"...código completo..."}</tool> — cria/sobrescreve o arquivo INTEIRO (cria pastas). P/ novo ou reescrita grande. Pula se idêntico.\n<tool name="code_edit">{"path":"src/app.js","old_string":"trecho exato","new_string":"novo"}</tool> — troca precisa; old_string deve existir exatamente. P/ mudança pequena. "replace_all":true p/ todas.\n<tool name="code_bash">{"cmd":"npm test","timeout_ms":60000}</tool> — shell no projeto (exige bridge.py + permissão).\nRegras: JSON válido na tag; nunca escreva o literal </tool> dentro de content; escrita pode pedir confirmação com diff (ask) ou ser negada (modo Plan/deny); Desfazer reverte a última mudança.
 Ao CRIAR código (landing page, site, script), SEMPRE invoque code_write — NUNCA cole o arquivo inteiro no chat.]`;
 function parseToolCall(text) {
   const s = String(text || '');
-  const m = s.match(/<tool\s+name=["'](web_search|web_open|news|open_site|run_skill|music_search|music_download|music_play|create_task|list_tasks|complete_task|delete_task|create_note|list_notes|edit_note|delete_note|code_read|code_list|code_glob|code_grep|code_write|code_edit|code_bash)["']\s*>([\s\S]*?)<\/tool>/i);
+  const m = s.match(/<tool\s+name=["'](web_search|web_open|news|open_site|run_skill|music_search|music_download|music_play|create_task|list_tasks|complete_task|delete_task|create_note|list_notes|edit_note|delete_note|list_convs|read_conv|code_read|code_list|code_glob|code_grep|code_write|code_edit|code_bash)["']\s*>([\s\S]*?)<\/tool>/i);
   if (m) { const nm = m[1].toLowerCase(); return { name: nm, arg: m[2].trim().slice(0, nm.startsWith('code_') ? 20000 : 500) }; }
   try {
     const jm = s.match(/\{\s*"name"\s*:\s*"([\w-]+)"\s*,\s*"arguments"\s*:\s*(\{[\s\S]*?\})\s*\}/);
@@ -3175,7 +3338,27 @@ async function execTool(name, arg, step) {
     const all = getNotes();
     try { switchTab('notes'); } catch {}
     if (!all.length) return 'NOTAS: nenhuma nota salva.';
-    return `NOTAS (${all.length}):\n` + all.slice(0, 10).map((n, i) => `${i + 1}. ${n.title}: ${n.text.slice(0, 160)}`).join('\n');
+    return `NOTAS (${all.length}):\n` + all.slice(0, 12).map((n, i) => `${i + 1}. ${n.title}: ${(n.text || '').slice(0, 500)}`).join('\n');
+  }
+  if (name === 'list_convs') {
+    say('Listando conversas…');
+    const all = getConvs().slice().sort((a, b) => (b.updated || b.ts || 0) - (a.updated || a.ts || 0));
+    if (!all.length) return 'CONVERSAS: nenhuma conversa salva.';
+    return `CONVERSAS (${all.length}):\n` + all.slice(0, 20).map((c, i) => `${i + 1}. [${c.id}] ${c.title} · ${new Date(c.updated || c.ts).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} · ${(c.messages || []).length} mensagens`).join('\n');
+  }
+  if (name === 'read_conv') {
+    say('Lendo conversa…');
+    const raw = String(arg || '').trim();
+    if (!raw) throw new Error('informe o trecho do título ou id da conversa');
+    let j = {};
+    try { j = JSON.parse(raw); } catch {}
+    const q = String(j.match || j.id || raw).toLowerCase();
+    const all = getConvs();
+    const conv = all.find(c => c.id === q) || all.find(c => (c.title || '').toLowerCase().includes(q)) || all.find(c => (c.messages || []).some(m => String(m.content || '').toLowerCase().includes(q)));
+    if (!conv) return 'CONVERSA NÃO ENCONTRADA: nenhuma bate com "' + raw + '". Salvas: ' + all.map(c => c.title).join(' | ');
+    const msgs = (conv.messages || []).slice(-30);
+    if (!msgs.length) return `CONVERSA "${conv.title}": sem mensagens.`;
+    return `CONVERSA "${conv.title}" (${msgs.length} últimas de ${(conv.messages || []).length}):\n` + msgs.map(m => `${m.role === 'user' ? 'Usuário' : 'IA'}: ${String(m.content || '').slice(0, 400)}`).join('\n');
   }
   if (name === 'edit_note') {
     say('Editando nota…');
@@ -3535,7 +3718,7 @@ function toast(icon, html) {
 }
 $('#btnExport').onclick = () => {
   const safeKeys = {}; Object.keys(keys || {}).forEach(k => safeKeys[k] = '');
-  const data = { cfg: { provider: cfg.provider, model: cfg.model, temperature: cfg.temperature, maxTokens: cfg.maxTokens }, keys: safeKeys, routines: getRoutines(), skills: getSkills(), tasks: getTasks(), reminders: getReminders(), convs: getConvs(), exportedAt: new Date().toISOString(), harness: 'v2' };
+  const data = { cfg: { provider: cfg.provider, model: cfg.model, temperature: cfg.temperature, maxTokens: cfg.maxTokens }, keys: safeKeys, routines: getRoutines(), skills: getSkills(), tasks: getTasks(), reminders: getReminders(), convs: getConvs(), mascot: { name: getMascotName(), showName: mascotNameOn(), birth: getBirth(), models: store.get('agentModels', []) || [], tokens: +store.get('agentTokens', 0) || 0 }, exportedAt: new Date().toISOString(), harness: 'v2' };
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
   a.download = 'free-agent-backup.json'; a.click();
@@ -3553,6 +3736,14 @@ $('#importFile').onchange = e => {
     if (j.keys) Object.assign(keys, j.keys), store.set('keys', keys);
     if (j.reminders) store.set('reminders', j.reminders);
     if (j.convs && j.convs.length) { store.set('convs', j.convs); loadConv(j.convs[0].id); }
+    if (j.mascot) {
+      if (typeof j.mascot.name === 'string') store.set('mascotName', j.mascot.name.trim());
+      if (typeof j.mascot.showName === 'boolean') store.set('mascotShowName', j.mascot.showName);
+      if (j.mascot.birth) store.set('agentBirth', j.mascot.birth);
+      if (Array.isArray(j.mascot.models)) store.set('agentModels', j.mascot.models);
+      if (typeof j.mascot.tokens === 'number') store.set('agentTokens', j.mascot.tokens);
+      applyBrand();
+    }
     renderAll(); toast('upload', 'Backup importado.');
   } catch { toast('x', 'Arquivo inválido.'); } };
   r.readAsText(f);
@@ -3603,7 +3794,7 @@ async function bootGreeting() {
   }
 }
 
-function renderAll() { renderConvs(); renderReminders(); renderCustomChips(); renderAgents(); renderRoutines(); renderSkills(); renderSideSkills(); renderTasks(); renderNotes(); renderLog(); refreshKeyField(); updateConn(); applyBackground(); window.I18N?.applyLang?.(); icons(); }
+function renderAll() { renderConvs(); renderReminders(); renderCustomChips(); renderAgents(); renderRoutines(); renderSkills(); renderSideSkills(); renderTasks(); renderNotes(); renderLog(); refreshKeyField(); updateConn(); applyBackground(); applyBrand(); window.I18N?.applyLang?.(); icons(); }
 renderAll();
 icons();
 askNotify()

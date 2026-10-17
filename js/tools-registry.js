@@ -132,6 +132,18 @@ export const TOOLS = {
     needsApproval: false,
     renderHint: () => `<tool name="delete_note">trecho da nota ou nº</tool>`,
   },
+  list_convs: {
+    desc: 'Listar conversas salvas (id + título + data). Use quando pedir ler/ver conversas anteriores.',
+    schema: { type: 'object', properties: {} },
+    needsApproval: false,
+    renderHint: () => `<tool name="list_convs"></tool>`,
+  },
+  read_conv: {
+    desc: 'Ler mensagens de uma conversa salva (por trecho do título ou id). Use quando pedir ler/achar info em conversa antiga.',
+    schema: { type: 'object', properties: { match: { type: 'string', maxLength: 200 } }, required: ['match'] },
+    needsApproval: false,
+    renderHint: () => `<tool name="read_conv">{"match":"trecho do título ou id"}</tool>`,
+  },
 };
 
 // System enxuto: nomes + 1 linha cada + slugs (sem prompts das skills)
@@ -148,9 +160,11 @@ export function buildToolsSection(activeSlugs) {
     `- complete_task(texto): concluir/marcar tarefa como feita.`,
     `- delete_task(texto): deletar/remover tarefa.`,
     `- create_note({"title","text"}): criar nota na aba Notas.`,
-    `- list_notes: ler notas (use ao perguntar minhas notas).`,
+    `- list_notes: ler notas COM o conteúdo (use ao perguntar minhas notas / o que anotei / conteúdo de nota).`,
     `- edit_note({"match","text"}): editar nota por trecho/nº.`,
     `- delete_note(match): deletar nota por trecho/nº.`,
+    `- list_convs: listar conversas salvas.`,
+    `- read_conv({"match"}): ler mensagens de uma conversa (trecho do título ou id).`,
     `- code_read({"path"}): ler arquivo do projeto.`,
     `- code_list({"path"}): listar pasta.`,
     `- code_glob({"pattern"}): achar arquivos.`,
@@ -164,7 +178,7 @@ export function buildToolsSection(activeSlugs) {
 
 export function parseToolCall(text) {
   const s = String(text || '');
-  const m = s.match(/<tool\s+name=["'](web_search|web_open|open_site|run_skill|music_search|music_download|music_play|create_task|list_tasks|complete_task|delete_task|create_note|list_notes|edit_note|delete_note|news|code_read|code_list|code_glob|code_grep|code_write|code_edit|code_bash)["']\s*>([\s\S]*?)<\/tool>/i);
+  const m = s.match(/<tool\s+name=["'](web_search|web_open|open_site|run_skill|music_search|music_download|music_play|create_task|list_tasks|complete_task|delete_task|create_note|list_notes|edit_note|delete_note|list_convs|read_conv|news|code_read|code_list|code_glob|code_grep|code_write|code_edit|code_bash)["']\s*>([\s\S]*?)<\/tool>/i);
   if (m) {
     let name = m[1].toLowerCase();
     if (name === 'news') name = 'web_search'; // compat legado

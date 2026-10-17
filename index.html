@@ -24,14 +24,12 @@
 <div id="app">
   <!-- ══════════ TOPBAR ══════════ -->
   <header id="topbar" class="glass-card">
-    <button class="brand" id="brandCore" title="Abrir o Núcleo">
-      <span class="wordmark"><b>FREE</b><small>AGENT</small></span>
+    <button class="brand" id="brandCore" title="Abrir o Mascote">
+      <span class="wordmark"><b id="brandTop">FREE</b><small>AGENT</small></span>
     </button>
     <div class="top-center"></div>
     <div class="top-right">
       <div id="connStatus" class="conn"><i data-lucide="wifi"></i><span class="dot"></span><span id="connLabel" data-i18n="nav.disconnected">desconectado</span></div>
-      <button id="btnCore" class="btn ghost" title="Abrir o Núcleo"><i data-lucide="orbit"></i><span data-i18n="nav.core">Núcleo</span><span id="coreBadge" class="badge" hidden>0</span></button>
-      <button id="btnNewChat" class="btn ghost" title="Nova conversa"><i data-lucide="plus"></i><span data-i18n="nav.new">Nova</span></button>
       <button id="btnSettings" class="btn ghost icon-only" title="Configurações"><i data-lucide="settings"></i></button>
     </div>
   </header>
@@ -116,7 +114,7 @@
     <section id="chatPane" class="glass-card">
       <div id="chatHeader">
         <div class="core-row">
-        <button id="coreMini" class="core-mini" title="Abrir o Núcleo">
+        <button id="coreMini" class="core-mini" title="Abrir o Mascote">
           <span class="cm-pulse" id="cmDot"></span>
           <span class="cm-text"><b id="coreStatus">Olá</b><small id="coreSub">dia tranquilo por aqui — se precisar de algo, é só falar.</small></span>
         </button>
@@ -339,7 +337,28 @@
 <!-- ══════════ NÚCLEO · overlay JARVIS ══════════ -->
 <div id="coreOverlay" hidden>
   <div class="core-stage">
-    <div class="eyes-track" id="eyesTrack"><div class="minimal-eyes eyes-happy" aria-label="Animated eyes"><div class="brow"></div><div class="eye"><div class="pupil"></div></div><div class="eye"><div class="pupil"></div></div><div class="mouth"></div></div></div>
+    <div class="eyes-track" id="eyesTrack">
+      <div class="bot-face-container">
+        <div class="bot-face" id="botFace">
+          <div class="bot-eyes">
+            <div class="bot-eye left"></div>
+            <div class="bot-eye right"></div>
+          </div>
+          <div class="bot-mouth"></div>
+        </div>
+      </div>
+    </div>
+    <p class="mascot-sleepy" id="mascotSleepy" hidden data-i18n="mascot.sleepy">Conecte um provedor de IA para despertar seu Agent</p>
+    <div class="mascot-stats" id="mascotStats" hidden>
+      <button class="ms-close" id="mascotCardClose" title="Fechar"><i data-lucide="x"></i></button>
+      <div class="ms-row"><span data-i18n="mascot.name">Mascote</span><b id="msName">—</b></div>
+      <div class="ms-row"><span data-i18n="mascot.awakened">Despertou em</span><b id="msAwakened">—</b></div>
+      <div class="ms-models"><span data-i18n="mascot.model">Modelos usados</span><ul id="msModels"></ul></div>
+      <div class="ms-tokens">
+        <div class="ms-tok-head"><span data-i18n="mascot.tokens">Tokens de Vida</span><b id="msTokens">0</b></div>
+        <div class="ms-bar"><div id="msBar"></div></div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -426,6 +445,13 @@
             <option value="en">English</option>
           </select>
         </label>
+        <label class="fld"><span data-i18n="set.mascotName">Nome do mascote</span>
+          <div style="display:flex;gap:8px">
+            <input id="mascotNameInput" type="text" maxlength="24" placeholder="Ex.: Harry" style="flex:1" />
+            <button id="mascotReset" class="btn ghost sm" data-i18n="set.mascotReset">Resetar</button>
+          </div>
+        </label>
+        <label class="fld fld-check"><span><input type="checkbox" id="mascotShowName" checked /> <span data-i18n="set.mascotShow">Mostrar nome do mascote no topo</span></span></label>
         <label class="fld"><span data-i18n="set.theme">Tema</span>
           <span class="segmented" id="themeSwitch" role="tablist" aria-label="Tema" style="display:flex">
             <button data-set-theme="light" title="Light"><i data-lucide="sun"></i>Light</button>
@@ -518,10 +544,13 @@
 
 <!-- Modal nota (visualização) -->
 <div id="noteModal" class="modal" hidden>
-  <div class="modal-card glass-card">
+  <div class="modal-card">
     <div class="modal-head">
       <h3 id="noteModalTitle">Nota</h3>
-      <button id="noteModalClose" class="btn ghost sm icon-only"><i data-lucide="x"></i></button>
+      <div class="note-head-acts">
+        <button id="noteModalCopy" class="btn ghost sm icon-only" title="Copiar nota"><i data-lucide="copy"></i></button>
+        <button id="noteModalClose" class="btn ghost sm icon-only"><i data-lucide="x"></i></button>
+      </div>
     </div>
     <div id="noteModalBody" class="note-full"></div>
     <div id="noteModalMeta" class="note-meta"></div>
@@ -554,6 +583,7 @@
       <li><b>Ollama local (sem chave):</b> instale <code>ollama</code> e rode <code>ollama serve</code></li>
       <li><b>LM Studio local (sem chave):</b> abra o LM Studio → aba Server → <code>Start Server</code> em <code>http://localhost:1234</code></li>
     </ul>
+    <p class="hint"><i data-lucide="lock"></i> <b>Nós nunca recebemos sua chave.</b> Ela fica só no seu navegador e é enviada direto da sua máquina ao provedor oficial escolhido.</p>
     <button class="btn primary sm" id="keysClose">Entendi</button>
   </div>
 </div>

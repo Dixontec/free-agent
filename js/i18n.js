@@ -5,7 +5,7 @@
 (function () {
   const DICT = {
     'pt-BR': {
-      'nav.core': 'Núcleo', 'nav.new': 'Nova', 'nav.disconnected': 'desconectado',
+      'nav.core': 'Mascote', 'nav.new': 'Nova', 'nav.disconnected': 'desconectado',
       'side.convs': 'Conversas', 'side.new': 'nova', 'side.agents': 'Agentes',
       'side.music': 'Música', 'side.skills': 'Skills ativas', 'side.system': 'Sistema',
       'side.nothing': 'Nada tocando', 'side.nothingSub': 'toque + arquivos ou peça no chat',
@@ -22,6 +22,9 @@
       'set.navConn': 'Conexão & Modelo', 'set.navLook': 'Aparência & Fundo',
       'set.navData': 'Meus dados', 'set.navCode': 'Coding Agent',
       'set.lang': 'Idioma', 'set.provider': 'Provedor', 'set.model': 'Modelo',
+      'set.mascotName': 'Nome do mascote', 'set.mascotReset': 'Resetar', 'set.mascotShow': 'Mostrar nome do mascote no topo',
+      'mascot.sleepy': 'Conecte um provedor de IA para despertar seu Agent',
+      'mascot.awakened': 'Despertou em', 'mascot.model': 'Modelos usados', 'mascot.tokens': 'Tokens de Vida', 'mascot.name': 'Mascote',
       'set.refresh': 'atualizar', 'set.keyOnly': 'só no seu navegador',
       'set.temp': 'Temperatura', 'set.maxTok': 'Máx tokens',
       'set.save': 'Salvar', 'set.test': 'Testar conexão',
@@ -54,7 +57,7 @@
       'langNames': 'português'
     },
     es: {
-      'nav.core': 'Núcleo', 'nav.new': 'Nueva', 'nav.disconnected': 'desconectado',
+      'nav.core': 'Mascota', 'nav.new': 'Nueva', 'nav.disconnected': 'desconectado',
       'side.convs': 'Conversaciones', 'side.new': 'nueva', 'side.agents': 'Agentes',
       'side.music': 'Música', 'side.skills': 'Skills activas', 'side.system': 'Sistema',
       'side.nothing': 'Nada reproduciendo', 'side.nothingSub': 'añade archivos o pídelo en el chat',
@@ -71,6 +74,9 @@
       'set.navConn': 'Conexión y modelo', 'set.navLook': 'Apariencia y fondo',
       'set.navData': 'Mis datos', 'set.navCode': 'Coding Agent',
       'set.lang': 'Idioma', 'set.provider': 'Proveedor', 'set.model': 'Modelo',
+      'set.mascotName': 'Nombre de la mascota', 'set.mascotReset': 'Restablecer', 'set.mascotShow': 'Mostrar el nombre de la mascota arriba',
+      'mascot.sleepy': 'Conecta un proveedor de IA para despertar a tu Agent',
+      'mascot.awakened': 'Despertó el', 'mascot.model': 'Modelos usados', 'mascot.tokens': 'Tokens de Vida', 'mascot.name': 'Mascota',
       'set.refresh': 'actualizar', 'set.keyOnly': 'solo en tu navegador',
       'set.temp': 'Temperatura', 'set.maxTok': 'Máx. tokens',
       'set.save': 'Guardar', 'set.test': 'Probar conexión',
@@ -103,7 +109,7 @@
       'langNames': 'español'
     },
     en: {
-      'nav.core': 'Core', 'nav.new': 'New', 'nav.disconnected': 'disconnected',
+      'nav.core': 'Mascot', 'nav.new': 'New', 'nav.disconnected': 'disconnected',
       'side.convs': 'Conversations', 'side.new': 'new', 'side.agents': 'Agents',
       'side.music': 'Music', 'side.skills': 'Active skills', 'side.system': 'System',
       'side.nothing': 'Nothing playing', 'side.nothingSub': 'add files or ask in chat',
@@ -120,6 +126,9 @@
       'set.navConn': 'Connection & Model', 'set.navLook': 'Appearance & Background',
       'set.navData': 'My data', 'set.navCode': 'Coding Agent',
       'set.lang': 'Language', 'set.provider': 'Provider', 'set.model': 'Model',
+      'set.mascotName': 'Mascot name', 'set.mascotReset': 'Reset', 'set.mascotShow': 'Show mascot name in the top bar',
+      'mascot.sleepy': 'Connect an AI provider to wake your Agent',
+      'mascot.awakened': 'Awakened on', 'mascot.model': 'Models used', 'mascot.tokens': 'Life Tokens', 'mascot.name': 'Mascot',
       'set.refresh': 'refresh', 'set.keyOnly': 'only in your browser',
       'set.temp': 'Temperature', 'set.maxTok': 'Max tokens',
       'set.save': 'Save', 'set.test': 'Test connection',
