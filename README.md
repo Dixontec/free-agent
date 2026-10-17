@@ -1,8 +1,14 @@
 # Free Agent — Local-First AI Harness
 
+<img width="1903" height="1073" alt="Captura de tela de 2026-10-17 15-55-06" src="https://github.com/user-attachments/assets/6620768c-bda6-4696-b6a6-df8ba122ffec" />
+<img width="1903" height="1073" alt="Captura de tela de 2026-10-17 15-54-54" src="https://github.com/user-attachments/assets/98160d67-b92b-4a44-a1c3-ab0b97a77dd6" />
+
+<img width="1903" height="1073" alt="image" src="https://github.com/user-attachments/assets/680ff6bf-c62c-4dd9-a1d7-0fe3b9f1426e" />
+
+
 > **Keywords:** local-first · AI harness · browser-based · no backend · no lock-in · LLM orchestrator · multi-provider · Groq · OpenAI · Gemini · Anthropic · Ollama · LM Studio · OpenRouter · coding agent · scheduled routines · skills · tasks · reminders · notes · privacy · open source · MIT · free & open-weight models
 
-> Free Agent (formerly **My OS**) is a 100% browser-based, local-first harness that sits between you and AI providers. No backend, no telemetry, no lock-in — your API keys never leave your machine.
+> Free Agent is a 100% browser-based, local-first harness that sits between you and AI providers. No backend, no telemetry, no lock-in — your API keys never leave your machine.
 
 **[🇺🇸 Read in English](#-english) · [🇧🇷 Leia em Português](#-português)**
 
