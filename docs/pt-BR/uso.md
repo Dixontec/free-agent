@@ -1,4 +1,4 @@
-# Uso — My OS
+# Uso — Free Agent
 
 ## Chat
 

@@ -1,4 +1,4 @@
-/* My OS Harness v2 — tools-registry.js
+/* Free Agent Harness v2 — tools-registry.js
    4 tools distintas, schemas sob demanda. Nada é despejado no prompt.
    Falha que originou: skillsCtx() jogava 9 prompts no system todo turno.
 */

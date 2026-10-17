@@ -1,4 +1,4 @@
-/* My OS Harness v2.1 — verifiers.js
+/* Free Agent Harness v2.1 — verifiers.js
    Verificação determinística com pendências estruturadas.
    Cada check retorna { ok, pending: [{check, reason, fix}] }.
 */

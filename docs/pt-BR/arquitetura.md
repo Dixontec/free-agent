@@ -1,4 +1,4 @@
-# Arquitetura — My OS (harness v2)
+# Arquitetura — Free Agent (harness v2)
 
 > Modelo é commodity. Harness decide. Em dúvida, falhe visível — nunca alucine.
 

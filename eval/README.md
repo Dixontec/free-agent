@@ -1,4 +1,4 @@
-# Eval do My OS Harness — golden tasks
+# Eval do Free Agent Harness — golden tasks
 
 Conjunto automatizado de comportamentos esperados. Roda **a cada mudança**:
 antes de comemorar feature nova, o eval tem que estar verde.

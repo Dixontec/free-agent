@@ -1,4 +1,4 @@
-# Rotinas — My OS
+# Rotinas — Free Agent
 
 Rotinas são automações agendadas por horário. Exemplo clássico: todo dia 08:00.
 

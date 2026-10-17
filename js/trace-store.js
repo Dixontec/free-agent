@@ -1,4 +1,4 @@
-/* My OS Harness v2 — trace-store.js
+/* Free Agent Harness v2 — trace-store.js
    Observabilidade completa: tool calls + decisões + latência + tokens.
    Falha que originou: log() 100 linhas sem latência, coreWindows máx 6.
 */
@@ -26,6 +26,6 @@ export function getTraces() {
 export function exportTraces() {
   const blob = new Blob([getTraces().map(t => JSON.stringify(t)).join('\n')], { type: 'application/jsonl' });
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob); a.download = 'myos-traces.jsonl'; a.click();
+  a.href = URL.createObjectURL(blob); a.download = 'free-agent-traces.jsonl'; a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 5000);
 }

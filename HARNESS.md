@@ -1,4 +1,4 @@
-# My OS Harness v2 — Arquitetura mínima
+# Free Agent Harness v2 — Arquitetura mínima
 
 ## Por que v2? (falhas da v1 mapeadas nos 8 princípios)
 

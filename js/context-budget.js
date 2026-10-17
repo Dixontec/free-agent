@@ -1,4 +1,4 @@
-/* My OS Harness v2 — context-budget.js
+/* Free Agent Harness v2 — context-budget.js
    Contexto é orçamento: compacta em vez de truncar, offload >4k.
    Falha que originou: history.slice(-10) cego + truncate 6000 chars.
 */

@@ -1,4 +1,4 @@
-/* My OS Harness v2 — gate.js
+/* Free Agent Harness v2 — gate.js
    Sandbox + aprovação humana p/ irreversível.
    Falha que originou: window.open(url) arbitrário + export com keys.
 */

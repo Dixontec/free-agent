@@ -1,4 +1,4 @@
-# Security — My OS
+# Security — Free Agent
 
 ## Threat model (honest summary)
 

@@ -1,4 +1,4 @@
-/* My OS · Entrada por voz: Ctrl+Espaço grava → Espaço encerra → transcreve → envia à IA.
+/* Free Agent · Entrada por voz: Ctrl+Espaço grava → Espaço encerra → transcreve → envia à IA.
    Sem modal: pill flutuante com onda ao vivo + blur sutil. Ao encerrar, some tudo
    e só o chat mostra carregando. Transcrição LOCAL (Whisper tiny, 1 download).
    Fallback: ditado do navegador.

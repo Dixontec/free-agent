@@ -1,4 +1,4 @@
-# Skills — My OS
+# Skills — Free Agent
 
 Skills são capacidades plugáveis que a IA pode invocar via `run_skill <slug>`.
 

@@ -1,4 +1,4 @@
-# Eval — My OS
+# Eval — Free Agent
 
 > Before celebrating a new feature, eval must be green.
 

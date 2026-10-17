@@ -1,4 +1,4 @@
-# My OS — nunca commite segredos. Keys ficam no navegador (localStorage), nunca no repo.
+# Free Agent — nunca commite segredos. Keys ficam no navegador (localStorage), nunca no repo.
 .env
 .env.local
 config.json

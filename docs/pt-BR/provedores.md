@@ -1,4 +1,4 @@
-# Provedores — My OS
+# Provedores — Free Agent
 
 ## Suportados
 

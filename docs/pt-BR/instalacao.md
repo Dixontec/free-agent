@@ -1,4 +1,4 @@
-# Instalação — My OS
+# Instalação — Free Agent
 
 > Tempo estimado: 2 minutos. Sem build, sem dependências de Node, sem banco de dados.
 

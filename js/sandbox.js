@@ -1,4 +1,4 @@
-/* ═══════════ My OS · Monitor Sandbox ═══════════
+/* ═══════════ Free Agent · Monitor Sandbox ═══════════
    Card-monitor no painel direito: mini tela do "computador Nexus".
    - Clique amplia em overlay; ESC/fundo/X fecha.
    - Mostra preview do código criado pelo harness (HTML renderiza; resto vira código).
@@ -19,7 +19,7 @@ window.Sandbox = (() => {
     return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
   function standbyHTML() {
-    return `<div class="sb-idle"><span class="sb-pulse"></span><b>MY OS</b><small>monitor standby · o preview do código aparece aqui</small></div>`;
+    return `<div class="sb-idle"><span class="sb-pulse"></span><b>FREE AGENT</b><small>monitor standby · o preview do código aparece aqui</small></div>`;
   }
   function bodyHTML() {
     if (state.video) return `<div class="sb-video-slot"></div>`;

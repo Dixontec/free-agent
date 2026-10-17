@@ -1,4 +1,4 @@
-/* My OS · Repositórios gratuitos de música (sem chave, 100% CORS-friendly)
+/* Free Agent · Repositórios gratuitos de música (sem chave, 100% CORS-friendly)
    Fontes com download legal: Internet Archive (CC/netlabels) + Wikimedia Commons (CC).
    + lista curada p/ busca manual. Exposto como window.MusicRepos.
 */

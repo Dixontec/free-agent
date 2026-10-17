@@ -1,5 +1,5 @@
 {
-  "$comment": "Golden tasks do My OS Harness. parse = matriz compartilhada (Node: tools-registry | Browser: app.js) — mesma fonte, sem drift. browser = cenários comportamentais executados via ?eval=1.",
+  "$comment": "Golden tasks do Free Agent Harness. parse = matriz compartilhada (Node: tools-registry | Browser: app.js) — mesma fonte, sem drift. browser = cenários comportamentais executados via ?eval=1.",
   "parse": [
     { "input": "<tool name=\"web_search\">lançamentos IA</tool>", "tool": "web_search", "arg": "lançamentos IA" },
     { "input": "<tool name=\"web_open\">https://example.com/a</tool>", "tool": "web_open", "arg": "https://example.com/a" },

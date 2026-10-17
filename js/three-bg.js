@@ -1,4 +1,4 @@
-/* ═══════════ My OS · Fundo 3D Three.js (partículas + ondas) ═══════════ */
+/* ═══════════ Free Agent · Fundo 3D Three.js (partículas + ondas) ═══════════ */
 import * as THREE from 'three';
 
 const canvas = document.getElementById('bg3d');

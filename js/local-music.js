@@ -1,9 +1,9 @@
-/* My OS · Biblioteca local de música (seus arquivos, IndexedDB persistente).
+/* Free Agent · Biblioteca local de música (seus arquivos, IndexedDB persistente).
    O agente enxerga via LocalMusic.search(). Classic script.
 */
 'use strict';
 (function () {
-  const DB = 'myos-music', STORE = 'tracks';
+  const DB = 'free-agent-music', STORE = 'tracks';
   const mem = []; // {id,name,artist,url,downloadUrl,source,license,page,local:true}
   const urlById = new Map();
 

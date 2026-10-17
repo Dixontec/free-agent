@@ -1,4 +1,4 @@
-/* ═══════════ My OS · Harness engine ═══════════
+/* ═══════════ Free Agent · Harness engine ═══════════
    Providers: Groq · OpenAI · Gemini · Anthropic · Ollama · OpenRouter
    + Chat real, comandos /news /wiki /yt /rotina /skill,
    + Rotinas agendadas, Skills plugáveis, Tarefas, Log, Temas, Núcleo.
@@ -46,13 +46,23 @@ setTheme(store.get('theme', 'glass'));
 let busyCount = 0, unseenWins = 0;
 function coreOverlayOpen() { return !$('#coreOverlay').hidden; }
 function openCore() { $('#coreOverlay').hidden = false; unseenWins = 0; updateBadge(); icons(); window.__neuralOn = true; if (window.__neuralBuild) window.__neuralBuild(); }
-function closeCore() { $('#coreOverlay').hidden = true; window.__neuralOn = false; }
+function closeCore() { $('#coreOverlay').hidden = true; window.__neuralOn = false; const t = $('#eyesTrack'); if (t) t.style.transform = ''; }
 $('#btnCore').onclick = openCore;
 $('#brandCore').onclick = openCore;
 $('#coreMini').onclick = openCore;
-$('#coreClose').onclick = closeCore;
-$('#coreClear').onclick = () => { $('#coreWindows').innerHTML = ''; };
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeCore(); });
+/* olhos seguem o mouse com suavidade; clique em qualquer lugar fecha */
+$('#coreOverlay').addEventListener('mousemove', e => {
+  if (!coreOverlayOpen()) return;
+  const t = $('#eyesTrack');
+  if (!t) return;
+  const cx = innerWidth / 2, cy = innerHeight / 2;
+  const dx = Math.max(-42, Math.min(42, (e.clientX - cx) * 0.12));
+  const dy = Math.max(-30, Math.min(30, (e.clientY - cy) * 0.12));
+  t.style.transform = `translate(${dx}px,${dy}px)`;
+});
+$('#coreOverlay').addEventListener('mouseleave', () => { const t = $('#eyesTrack'); if (t) t.style.transform = ''; });
+$('#coreOverlay').addEventListener('click', closeCore);
 function updateBadge() {
   const b = $('#coreBadge');
   b.hidden = unseenWins === 0;
@@ -63,8 +73,6 @@ let greetLead = '', greetSub = '';
 function setCoreState(label, detail) {
   $('#coreStatus').textContent = label;
   $('#coreSub').textContent = detail || greetSub || '…';
-  $('#coreState').textContent = label;
-  if (detail) $('#coreDetail').textContent = detail;
 }
 function coreBusy(label, detail) {
   busyCount++;
@@ -87,6 +95,7 @@ function coreIdle(detail) {
 /* Abre uma "janela" de atividade ao redor do Núcleo */
 function coreWindow({ icon = 'activity', title = 'Atividade', body = '', tone = '' }) {
   const box = $('#coreWindows');
+  if (!box) return null;
   while (box.children.length >= 6) box.lastChild.remove();
   const d = document.createElement('div');
   d.className = 'cwin ' + tone;
@@ -103,10 +112,6 @@ function coreWinDone(win, okText, tone = 'ok') {
   const p = win.querySelector('p');
   if (p && okText) p.innerHTML += `<br><b>${escapeHtml(okText)}</b>`;
 }
-setInterval(() => {
-  $('#coreSysTime').textContent = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-  $('#coreSysProv').textContent = (PROVIDERS[cfg.provider]?.label || '—') + ' · ' + (cfg.model || '—');
-}, 1000);
 
 /* ───────── PROVIDERS & MODELOS ───────── */
 const PROVIDERS = {
@@ -349,7 +354,7 @@ async function callLLM(messages, opts = {}) {
   let url = PROVIDERS[p].url;
   const headers = { 'Content-Type': 'application/json' };
   if (key) headers.Authorization = 'Bearer ' + key;
-  if (p === 'openrouter') { url = $('#baseUrl').value.trim() || url; headers['HTTP-Referer'] = location.href; headers['X-Title'] = 'My OS Harness'; }
+  if (p === 'openrouter') { url = $('#baseUrl').value.trim() || url; headers['HTTP-Referer'] = location.href; headers['X-Title'] = 'Free Agent Harness'; }
   if (p === 'lmstudio') {
     // LM Studio / qualquer OpenAI-compatível local (llama.cpp, vLLM, text-gen-webui).
     // Aceita: http://localhost:1234/v1  ·  http://localhost:1234/v1/chat/completions  ·  http://host:porta/qualquer-base
@@ -418,7 +423,7 @@ $('#btnTest').onclick = async () => {
   setConn('…', ''); toast('zap', 'Testando <b>' + escapeHtml(PROVIDERS[cfg.provider].label) + '</b>…');
   coreBusy('Testando conexão', PROVIDERS[cfg.provider].label + ' · ' + cfg.model);
   const win = coreWindow({ icon: 'zap', title: 'Teste de conexão', body: `Provedor <b>${escapeHtml(PROVIDERS[cfg.provider].label)}</b> · modelo <b>${escapeHtml(cfg.model)}</b>` });
-  try { const out = await callLLM([{ role: 'user', content: 'Responda só: OK My OS online.' }], { maxTokens: 32 });
+  try { const out = await callLLM([{ role: 'user', content: 'Responda só: OK Free Agent online.' }], { maxTokens: 32 });
     setConn('ok', ''); toast('check', '<b>Conectado.</b> ' + escapeHtml(out).slice(0, 120)); log('Conexão OK com ' + cfg.provider + ' · ' + cfg.model, 'ok');
     coreWinDone(win, 'Conexão estabelecida.');
   } catch (e) { setConn('err', ''); toast('x', escapeHtml(e.message)); log('Falha conexão: ' + e.message, 'warn'); coreWinDone(win, 'Falha: ' + e.message.slice(0, 120), 'warn'); }
@@ -889,7 +894,7 @@ $('#composer').addEventListener('submit', async e => {
     const wsNote = wsH
       ? `\n\n[WORKSPACE ativo: ${wsH.name} — arquivos do projeto via code_read/code_list/code_glob/code_grep/code_write/code_edit/code_bash.]`
       : `\n\n[Sem workspace autorizado: se pedir criar/ler/editar código, use code_* mesmo assim (o sistema orienta a autorizar a pasta) ou explique Configurações → Coding → Autorizar pasta.]`;
-    const sys = 'Você é o My OS, harness de IA premium. Responda em ' + PL() + ', direto e útil, com formatação leve (negrito, listas, código quando preciso).' + TOOLS_SYS + wsNote
+    const sys = 'Você é o Free Agent, harness de IA premium. Responda em ' + PL() + ', direto e útil, com formatação leve (negrito, listas, código quando preciso).' + TOOLS_SYS + wsNote
       + (_main.personality ? `\n\n[AGENTE PRINCIPAL ${_main.name}: ${_main.personality}]` : '')
       + skillsCtx()
       + (skill ? `\n\n[SKILL ATIVA: ${skill.title}] ${skill.prompt}` : '');
@@ -990,7 +995,7 @@ function ytEmbed(url) {
 }
 function openVideoWindow(url) {
   try {
-    const w = window.open(url, 'myos-media-' + Date.now(), 'width=960,height=600,menubar=no,toolbar=no,location=no,status=no');
+    const w = window.open(url, 'free-agent-media-' + Date.now(), 'width=960,height=600,menubar=no,toolbar=no,location=no,status=no');
     if (w) { try { w.focus(); } catch {} return true; }
   } catch {}
   return false;
@@ -1527,7 +1532,7 @@ async function runActionLine(line, origin, stepWin) {
   }
   else if (k === 'prompt' || k === 'ia' || k === 'perguntar') {
     $('#typing').hidden = false;
-    try { const sentR = [{ role: 'system', content: `Você executa rotinas do My OS. Responda em ${PL()}.` }, { role: 'user', content: val }];
+    try { const sentR = [{ role: 'system', content: `Você executa rotinas do Free Agent. Responda em ${PL()}.` }, { role: 'user', content: val }];
       const out = await callLLM(sentR);
       trackLLM(sentR, out);
       $('#typing').hidden = true; addMsg('ai', out, `<span class="src">rotina · ${escapeHtml(origin)} · ${PROVIDERS[cfg.provider].label}</span>`);
@@ -1626,7 +1631,8 @@ async function runRoutine(r, manual = false) {
   for (const a of r.actions) {
     i++;
     const [kind] = a.split(':');
-    win.querySelector('p').innerHTML += `<br>${i}. ${escapeHtml(a.slice(0, 80))}`;
+    const wp = win && win.querySelector('p');
+    if (wp) wp.innerHTML += `<br>${i}. ${escapeHtml(a.slice(0, 80))}`;
     awStep(aw, `<div class="awline">${ic('chevron-right')}<span>Ação <b>${i}/${r.actions.length}</b> (${escapeHtml(kind.trim())}): ${escapeHtml(a.slice(0, 60))}…</span></div>`);
     setCoreState(`${r.name} · ${i}/${r.actions.length}`, kind.trim() + ': ' + a.slice(0, 60));
     try { await runActionLine(a, r.name, win); results.push({ line: a, ok: true }); }
@@ -1638,7 +1644,7 @@ async function runRoutine(r, manual = false) {
   coreIdle(bad.length ? r.name + ' com pendência.' : r.name + ' aplicada.');
   const all = getRoutines(); const ix = all.findIndex(x => x.id === r.id);
   if (ix >= 0) { all[ix].lastRun = new Date().toLocaleString('pt-BR'); saveRoutines(all); }
-  try { new Notification('My OS · ' + r.name, { body: r.actions.length + ' ações executadas.' }); } catch {}
+  try { new Notification('Free Agent · ' + r.name, { body: r.actions.length + ' ações executadas.' }); } catch {}
 }
 /* scheduler: checa a cada 20s */
 setInterval(() => {
@@ -2029,7 +2035,7 @@ function fireReminder(r) {
   toast('bell', `<b>Lembrete</b> · ${escapeHtml(r.text)}`);
   log('Lembrete disparado: ' + r.text, 'ok');
   coreWindow({ icon: 'bell', title: 'Lembrete', body: `<b>${escapeHtml(r.text)}</b> · ${escapeHtml(r.time)}` });
-  try { new Notification('My OS · Lembrete', { body: r.text }); } catch {}
+  try { new Notification('Free Agent · Lembrete', { body: r.text }); } catch {}
   speak(r.text);
   const all = getReminders(); const ix = all.findIndex(x => x.id === r.id);
   if (ix >= 0) {
@@ -2319,7 +2325,7 @@ async function tryLocalAutomation(text) {
   if (m) {
     const last = [...history].reverse().find(x => x.role === 'assistant');
     if (!last) { addMsg('ai', 'Ainda não há conteúdo para salvar. Peça algo primeiro.'); return true; }
-    const name = m[1] || ('myos-' + new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '') + '.md');
+    const name = m[1] || ('free-agent-' + new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '') + '.md');
     return await saveFileFlow(name, last.content, 'Conteúdo da conversa');
   }
   m = t.match(/cria?(?:r|e)?\s+(?:um\s+)?arquivo\s+(.+)/is);
@@ -2577,7 +2583,7 @@ $('#ctxBar').onclick = async () => {
 paintCtx();
 
 /* ───────── ARQUIVOS NO PC (só na pasta autorizada) ───────── */
-const FS_DB = 'myos-fs';
+const FS_DB = 'free-agent-fs';
 function idbOpen() {
   return new Promise((res, rej) => {
     try {
@@ -3516,7 +3522,7 @@ try {
     const data = { exportedAt: new Date().toISOString(), log: store.get('log', []), traces: JSON.parse(localStorage.getItem('nexus:trace-v2') || '[]') };
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
-    a.download = 'myos-log.json'; a.click();
+    a.download = 'free-agent-log.json'; a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
   };
 } catch {}
@@ -3532,7 +3538,7 @@ $('#btnExport').onclick = () => {
   const data = { cfg: { provider: cfg.provider, model: cfg.model, temperature: cfg.temperature, maxTokens: cfg.maxTokens }, keys: safeKeys, routines: getRoutines(), skills: getSkills(), tasks: getTasks(), reminders: getReminders(), convs: getConvs(), exportedAt: new Date().toISOString(), harness: 'v2' };
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
-  a.download = 'myos-backup.json'; a.click();
+  a.download = 'free-agent-backup.json'; a.click();
   toast('download', 'Backup exportado.');
 };
 $('#btnImport').onclick = () => $('#importFile').click();
@@ -3579,7 +3585,7 @@ async function bootGreeting() {
       `Notas (${notes.length}): ${notes.join(' | ') || 'nenhuma'}.`
     ].join('\n');
     const out = await callLLM([
-      { role: 'system', content: `Você é o assistente do My OS, um orquestrador local que conhece o dia do usuário. Escreva UMA saudação inicial em ${PL()} para o topo do app, no máximo 2 frases e ~220 caracteres, tom gentil, respeitoso, natural e discreto, sem emojis, sem markdown, sem aspas, sem listas, sem travessões. Regras: (1) Não comece com "Olá", a interface já cumprimenta sozinha. (2) Se houver tarefas pendentes, resuma de forma gentil e curta quantas são e o essencial delas. (3) Inclua os lembretes do dia com horário quando forem relevantes. (4) Olhe as notas e, se alguma aponta algo que o usuário não deve esquecer hoje (um vídeo a gravar, um compromisso, um projeto), mencione isso de forma natural. (5) Nunca copie os dados crus um a um; reescreva com contexto e bom senso. (6) Se não houver nada relevante, diga algo no estilo: "dia tranquilo por aqui. Se precisar de algo, é só falar." (7) Não confirme dados, não dê instruções, não pergunte nada.` },
+      { role: 'system', content: `Você é o assistente do Free Agent, um orquestrador local que conhece o dia do usuário. Escreva UMA saudação inicial em ${PL()} para o topo do app, no máximo 2 frases e ~220 caracteres, tom gentil, respeitoso, natural e discreto, sem emojis, sem markdown, sem aspas, sem listas, sem travessões. Regras: (1) Não comece com "Olá", a interface já cumprimenta sozinha. (2) Se houver tarefas pendentes, resuma de forma gentil e curta quantas são e o essencial delas. (3) Inclua os lembretes do dia com horário quando forem relevantes. (4) Olhe as notas e, se alguma aponta algo que o usuário não deve esquecer hoje (um vídeo a gravar, um compromisso, um projeto), mencione isso de forma natural. (5) Nunca copie os dados crus um a um; reescreva com contexto e bom senso. (6) Se não houver nada relevante, diga algo no estilo: "dia tranquilo por aqui. Se precisar de algo, é só falar." (7) Não confirme dados, não dê instruções, não pergunte nada.` },
       { role: 'user', content: ctx }
     ], { maxTokens: 140, temperature: 0.6, noTools: true });
     let sub = String(out || '').trim()

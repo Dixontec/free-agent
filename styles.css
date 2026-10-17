@@ -1,4 +1,4 @@
-/* ═══════════ My OS · AI Harness · light / dark / glass ═══════════ */
+/* ═══════════ Free Agent · AI Harness · light / dark / glass ═══════════ */
 *{box-sizing:border-box;margin:0;padding:0}
 [hidden]{display:none!important}
 :root{
@@ -168,11 +168,21 @@ html[data-theme="dark"] .chips button:hover{color:#1d1d1f}
 .skill.flash{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent),0 0 24px rgba(0,113,227,.35)}
 .skill.flash::after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(transparent,rgba(0,113,227,.30),transparent);animation:sweep 1.1s ease-in-out 2}
 @keyframes sweep{from{transform:translateY(-100%)}to{transform:translateY(100%)}}
-/* ── Canvas neural ── */
-#neuralWrap{width:min(640px,92vw);margin:4px 0}
-#neuralCanvas{width:100%;height:300px;display:block;border-radius:16px}
-.neural-legend{display:flex;gap:14px;justify-content:center;font-size:11px;color:var(--muted);margin-top:6px}
-.neural-legend i{width:9px;height:9px;border-radius:50%;display:inline-block;margin-right:5px}
+/* ── Minimal eyes (Núcleo) ── */
+.eyes-track{transition:transform .45s cubic-bezier(.22,1,.36,1);will-change:transform}
+.minimal-eyes{--iris:#7cf7e5;--white:#f4fbff;position:relative;width:256px;height:159px;display:flex;justify-content:center;align-items:center;gap:26px;animation:float 4.5s ease-in-out infinite}
+.minimal-eyes .eye{position:relative;width:89px;height:110px;background:var(--white);border-radius:48% 48% 45% 45%;overflow:hidden;transform-origin:center}
+.minimal-eyes .pupil{position:absolute;left:50%;top:48%;width:36px;height:45px;background:var(--iris);border-radius:50%;transform:translate(-50%,-50%)}
+.minimal-eyes .pupil:before{content:"";position:absolute;left:10px;top:8px;width:13px;height:19px;border-radius:50%;background:#101a20}
+.minimal-eyes .pupil:after{content:"";position:absolute;left:7px;top:7px;width:8px;height:8px;border-radius:50%;background:white}
+.minimal-eyes .brow{position:absolute;top:7px;left:28px;width:55px;height:7px;border-radius:9px;background:var(--white);opacity:0}
+.minimal-eyes .mouth{position:absolute;width:30px;height:11px;border-bottom:4px solid var(--white);border-radius:0 0 50% 50%;bottom:0;left:calc(50% - 15px)}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
+@keyframes blink{0%,43%,46%,100%{transform:scaleY(1)}44%,45%{transform:scaleY(.06)}}
+.eyes-happy .eye{height:47px;border-radius:50% 50% 10% 10%;transform:translateY(17px) rotate(4deg)}
+.eyes-happy .eye:nth-child(3){transform:translateY(17px) rotate(-4deg)}
+.eyes-happy .pupil{opacity:0}
+.eyes-happy .mouth{width:46px;height:19px;left:calc(50% - 23px);border-width:5px}
 .devby{font-size:11.5px;color:var(--muted);margin-top:6px;letter-spacing:.02em;display:flex;align-items:center;justify-content:center;gap:5px}
 .devby a{color:var(--ink);font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:5px}
 .devby a:hover{color:var(--accent)}
@@ -367,9 +377,9 @@ html[data-theme="light"] .logdet pre{background:#1d1d1f;color:#f5f5f7}
 .logitem.ok{border-left:3px solid #30d158}.logitem.info{border-left:3px solid var(--accent)}.logitem.warn{border-left:3px solid #ff9f0a}
 
 /* ── NÚCLEO overlay estilo JARVIS ── */
-#coreOverlay{position:fixed;inset:0;z-index:70;display:grid;place-items:center;background:rgba(3,4,12,.72);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);overflow-y:auto;padding:24px}
+#coreOverlay{position:fixed;inset:0;z-index:70;display:grid;place-items:center;background:transparent;backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);overflow-y:auto;padding:24px}
 #coreOverlay[hidden]{display:none}
-html[data-theme="light"] #coreOverlay{background:rgba(245,245,247,.82)}
+html[data-theme="light"] #coreOverlay{background:transparent}
 .core-stage{display:flex;flex-direction:column;align-items:center;gap:10px;max-width:860px;width:100%;position:relative;padding:10px 0 30px}
 #coreClose{position:absolute;top:0;right:0}
 .core-sys{display:flex;align-items:center;gap:10px;font-family:var(--mono);font-size:11.5px;letter-spacing:.22em;color:var(--muted);text-transform:uppercase}
@@ -389,10 +399,6 @@ html[data-theme="light"] #coreOverlay{background:rgba(245,245,247,.82)}
 .core-big.busy .cb-core{animation-duration:.9s;box-shadow:0 0 60px color-mix(in srgb,var(--c2) 95%,transparent),0 0 150px color-mix(in srgb,var(--c1) 55%,transparent)}
 #coreState{font-size:24px;font-weight:800;letter-spacing:-.01em;text-align:center}
 #coreDetail{font-size:13px;color:var(--muted);text-align:center;max-width:560px}
-.core-bars{display:flex;align-items:flex-end;gap:4px;height:30px;margin:4px 0}
-.core-bars span{width:5px;border-radius:3px;background:linear-gradient(var(--c1),var(--c2));animation:bars 1s ease-in-out infinite;opacity:.85}
-.core-bars span:nth-child(2n){animation-delay:.15s}.core-bars span:nth-child(3n){animation-delay:.3s}.core-bars span:nth-child(4n){animation-delay:.45s}.core-bars span:nth-child(5n){animation-delay:.6s}
-@keyframes bars{0%,100%{height:22%}50%{height:100%}}
 #coreWindows{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;width:100%;margin-top:8px}
 .cwin{background:var(--card);backdrop-filter:blur(24px);border:1px solid var(--stroke);border-left:3px solid var(--accent);border-radius:14px;padding:11px 13px;box-shadow:var(--shadow);animation:cwin .35s cubic-bezier(.2,.9,.3,1.2);text-align:left}
 .cwin.ok{border-left-color:#30d158}.cwin.warn{border-left-color:#ff9f0a}

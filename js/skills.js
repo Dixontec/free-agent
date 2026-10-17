@@ -1,4 +1,4 @@
-/* ═══════════ My OS · Catálogo padrão de Skills ═══════════
+/* ═══════════ Free Agent · Catálogo padrão de Skills ═══════════
    Cada skill: { slug, icon, title, desc, prompt, action?, active }
    `icon` = nome de ícone Lucide (ex.: "search"). O usuário pode
    adicionar/editar/desativar quantas quiser (persistido em localStorage).

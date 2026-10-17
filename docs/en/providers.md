@@ -1,4 +1,4 @@
-# Providers — My OS
+# Providers — Free Agent
 
 ## Supported
 

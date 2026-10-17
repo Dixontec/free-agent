@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""My OS Harness · bridge local opcional p/ o Coding Agent (stdlib only).
+"""Free Agent Harness · bridge local opcional p/ o Coding Agent (stdlib only).
 
 Permite ao app (100% front-end) executar comandos shell DENTRO desta pasta,
 com token + jail de diretório + blocklist + timeout. Fail closed por padrão.
@@ -72,7 +72,7 @@ def yti_search(query, timeout=12):
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "MyOSBridge/1.0"
+    server_version = "FreeAgentBridge/1.0"
 
     def _cors(self):
         self.send_header("Access-Control-Allow-Origin", "*")
@@ -184,7 +184,7 @@ def main():
     srv = HTTPServer(("127.0.0.1", args.port), Handler)
     srv.root = root
     srv.token = token
-    print("My OS bridge ON  http://127.0.0.1:%d  root=%s" % (args.port, root))
+    print("Free Agent bridge ON  http://127.0.0.1:%d  root=%s" % (args.port, root))
     print("TOKEN (cole no app): %s" % token)
     try:
         srv.serve_forever()

@@ -1,4 +1,4 @@
-/* My OS · Reprodutor de música (fila + barra fixa + aba Música).
+/* Free Agent · Reprodutor de música (fila + barra fixa + aba Música).
    Classic script — usa window.MusicRepos. Fila persiste em localStorage.
 */
 'use strict';

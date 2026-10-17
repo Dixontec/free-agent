@@ -1,4 +1,4 @@
-/* My OS Harness v2.1 — harness-core.js
+/* Free Agent Harness v2.1 — harness-core.js
    Loop: executa → VERIFICA se terminou → se pendência, pede correção → só então entrega.
 */
 'use strict';
@@ -86,7 +86,7 @@ export async function runReAct(userText, deps) {
   const wsNote = deps.workspace
     ? `\n[WORKSPACE ativo: ${deps.workspace} — arquivos do projeto via code_read/code_list/code_glob/code_grep/code_write/code_edit/code_bash.]`
     : `\n[Sem workspace autorizado: se pedir criar/ler/editar código, use code_* mesmo assim (o sistema orienta a autorizar a pasta) ou explique Configurações → Coding → Autorizar pasta.]`;
-  const systemBase = `Você é o My OS. Responda em ${PL()}, direto.\n${toolsSection}${wsNote}\nRegra: se dá p/ responder direto, RESPONDA DIRETO sem tool. Só chame tool se pedir dado externo/ação. 1 tool por turno ou resposta final. Máx ${LIMITS.maxSteps} passos. NUNCA use JSON {"name":...} — só <tool name="...">. Antes de responder, confira: cumpri o pedido? citei links reais só se pesquisei?`;
+  const systemBase = `Você é o Free Agent. Responda em ${PL()}, direto.\n${toolsSection}${wsNote}\nRegra: se dá p/ responder direto, RESPONDA DIRETO sem tool. Só chame tool se pedir dado externo/ação. 1 tool por turno ou resposta final. Máx ${LIMITS.maxSteps} passos. NUNCA use JSON {"name":...} — só <tool name="...">. Antes de responder, confira: cumpri o pedido? citei links reais só se pesquisei?`;
   const toolOutputs = [];
   const toolsUsed = [];
   const searchQs = [];

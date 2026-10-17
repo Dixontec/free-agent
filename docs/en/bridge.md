@@ -1,4 +1,4 @@
-# Bridge & Coding Agent — My OS
+# Bridge & Coding Agent — Free Agent
 
 ## Modes
 

@@ -1,4 +1,4 @@
-# Routines — My OS
+# Routines — Free Agent
 
 Routines are time-scheduled automations. Classic example: every day at 08:00.
 

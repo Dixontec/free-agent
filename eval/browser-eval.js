@@ -1,4 +1,4 @@
-/* My OS Harness — self-test no navegador. Uso: http://localhost:8080/?eval=1
+/* Free Agent Harness — self-test no navegador. Uso: http://localhost:8080/?eval=1
    Roda os cenários de eval/golden-tasks.json contra o app VIVO
    (intents reais, player real, IndexedDB real) com ISOLAMENTO TOTAL:
    snapshot de tudo antes, restore de tudo depois. Não destrói dados.

@@ -1,4 +1,4 @@
-/* ═══════════ My OS · Coding Agent (estilo OpenCode) ═══════════
+/* ═══════════ Free Agent · Coding Agent (estilo OpenCode) ═══════════
    Ferramentas de arquivo + shell p/ o agente codar dentro do workspace.
    - Workspace = pasta autorizada (File System Access API, mesma de getWorkDir).
    - Toda escrita restrita ao workspace (contenção por partes, sem `..` fugindo).

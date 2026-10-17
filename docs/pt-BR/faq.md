@@ -1,4 +1,4 @@
-# FAQ — My OS
+# FAQ — Free Agent
 
 **É grátis?** O app é MIT e gratuito. Groq tem plano grátis, Ollama/LM Studio são locais e gratuitos. OpenAI/Anthropic são pagas.
 

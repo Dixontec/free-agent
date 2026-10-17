@@ -1,4 +1,4 @@
-/* ═══════════ My OS · Núcleo Neural 2D (Three.js) ═══════════
+/* ═══════════ Free Agent · Núcleo Neural 2D (Three.js) ═══════════
    Hub central + nós de Skills (azul) + nós de Memórias (rosa).
    Pulsos percorrem as arestas quando cada área é usada.
 */

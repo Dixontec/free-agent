@@ -1,4 +1,4 @@
-/* My OS Harness — eval automatizado (zero deps). Uso: node eval/run-eval.mjs
+/* Free Agent Harness — eval automatizado (zero deps). Uso: node eval/run-eval.mjs
    Testa os módulos REAIS: registry, verifiers, gate, context-budget e o
    loop runReAct com LLM simulado (prova verifica→corrige→entrega).
    Exit 0 = tudo passou. Exit 1 = regressão (pronto p/ CI).

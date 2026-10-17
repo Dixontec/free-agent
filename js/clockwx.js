@@ -1,4 +1,4 @@
-/* My OS · Relógio + temperatura (NUNCA exibe localidade).
+/* Free Agent · Relógio + temperatura (NUNCA exibe localidade).
    Fonte: Open-Meteo (grátis, sem chave). Coords: cache → geolocalização → IP.
    Só renderiza hora, data e temperatura. Nenhum nome de lugar no DOM.
 */

@@ -2,7 +2,7 @@
 
 ## 🇧🇷 Português
 
-Obrigado por querer melhorar o My OS! Fork + PR é o caminho.
+Obrigado por querer melhorar o Free Agent! Fork + PR é o caminho.
 
 1. Faça fork, clone, crie uma branch: `git checkout -b feat/minha-melhoria`.
 2. Sirva local (`python3 -m http.server 8080`) e teste.
@@ -15,7 +15,7 @@ Padrão: JS `// comentários curtos`, sem build, sem dependências novas sem mot
 
 ## 🇺🇸 English
 
-Thanks for improving My OS! Fork + PR is the way.
+Thanks for improving Free Agent! Fork + PR is the way.
 
 1. Fork, clone, branch: `git checkout -b feat/my-improvement`.
 2. Serve locally (`python3 -m http.server 8080`) and test.
