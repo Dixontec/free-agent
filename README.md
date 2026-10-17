@@ -33,6 +33,8 @@ Principles:
 - **10 built-in skills**: deep web research, news digest, morning routine, YouTube player, music & focus, app opener, smart summarizer, Linux automation, multi-provider search, web browser — plus create your own.
 - **Free music, no key**: search Internet Archive + Wikimedia, play instantly or download MP3. Local player with queue, authorized folder, chat commands.
 - **Coding agent (plan/build)**: read, search, edit and create project files with diff preview, per-tool permissions, undo, workspace jailed to the authorized folder, optional local shell via `bridge.py`.
+- **Multi-language UI** — full interface in **Portuguese (BR)**, **English** and **Spanish**; switch anytime in Settings → Appearance, with dynamic greetings and agent prompts in the chosen language.
+- **Premium themes & backgrounds** — Light · Dark · Glass with a refined, premium look, plus a background gallery with high-resolution organic paper-cut artwork (green and pink) as default first-run theme.
 - **3 premium Apple-style themes** (Light · Dark · Glass), Three.js 3D background + aurora, JARVIS-style Core with live activity windows, system monitor, clock + weather, reminders, notes, full log + agent traces, JSON export/import without secrets.
 - **Automated eval**: `node eval/run-eval.mjs` (logic + real loop) + in-browser self-test `?eval=1` against the live app, fully isolated from your data.
 
@@ -140,6 +142,8 @@ Princípios:
 - **10 skills ativas por padrão**: pesquisa web profunda, digest de notícias, rotina da manhã, YouTube player, música & foco, abridor de apps, resumo inteligente, automação Linux, busca multi-provedor, navegador web — e você pode criar as suas.
 - **Música livre sem chave**: busca em Internet Archive + Wikimedia, toca na hora ou baixa MP3. Player local com fila, pasta autorizada, comandos pelo chat.
 - **Coding agent (plan/build)**: leia, busque, edite e crie arquivos do projeto com diff preview, permissões por ferramenta, undo, workspace restrito à pasta autorizada e shell local opcional via `bridge.py`.
+- **Interface multi-idioma** — interface completa em **português (BR)**, **inglês** e **espanhol**; troque a qualquer momento em Configurações → Aparência, com saudações dinâmicas e prompts do agente no idioma escolhido.
+- **Temas e fundos premium** — Light · Dark · Glass com visual refinado e mais premium, além de uma galeria de fundos com arte orgânica paper-cut em alta resolução (verde e rosa) como tema padrão na primeira abertura.
 - **3 temas Apple premium** (Light · Dark · Glass), fundo 3D Three.js + aurora, Núcleo estilo JARVIS com janelas de atividade em tempo real, monitor de sistema, relógio + clima, lembretes, notas, log completo + traces do agente, export/import JSON sem segredos.
 - **Eval automatizado**: `node eval/run-eval.mjs` (lógica + loop real) + self-test no navegador `?eval=1` contra o app vivo, com isolamento total dos seus dados.
 

@@ -29,9 +29,9 @@
     </button>
     <div class="top-center"></div>
     <div class="top-right">
-      <div id="connStatus" class="conn"><i data-lucide="wifi"></i><span class="dot"></span><span id="connLabel">desconectado</span></div>
-      <button id="btnCore" class="btn ghost" title="Abrir o Núcleo"><i data-lucide="orbit"></i>Núcleo<span id="coreBadge" class="badge" hidden>0</span></button>
-      <button id="btnNewChat" class="btn ghost" title="Nova conversa"><i data-lucide="plus"></i>Nova</button>
+      <div id="connStatus" class="conn"><i data-lucide="wifi"></i><span class="dot"></span><span id="connLabel" data-i18n="nav.disconnected">desconectado</span></div>
+      <button id="btnCore" class="btn ghost" title="Abrir o Núcleo"><i data-lucide="orbit"></i><span data-i18n="nav.core">Núcleo</span><span id="coreBadge" class="badge" hidden>0</span></button>
+      <button id="btnNewChat" class="btn ghost" title="Nova conversa"><i data-lucide="plus"></i><span data-i18n="nav.new">Nova</span></button>
       <button id="btnSettings" class="btn ghost icon-only" title="Configurações"><i data-lucide="settings"></i></button>
     </div>
   </header>
@@ -40,12 +40,12 @@
     <!-- ══════════ SIDEBAR ESQUERDA ══════════ -->
     <aside id="sidebar" class="glass-card">
       <section class="side-block">
-        <h2><i data-lucide="history"></i> Conversas <button id="btnNewConv" class="linkbtn" title="Nova conversa"><i data-lucide="plus"></i>nova</button></h2>
+        <h2><i data-lucide="history"></i> <span data-i18n="side.convs">Conversas</span> <button id="btnNewConv" class="linkbtn" title="Nova conversa"><i data-lucide="plus"></i><span data-i18n="side.new">nova</span></button></h2>
         <div id="convList" class="convlist"></div>
       </section>
 
       <section class="side-block" id="agentsSide">
-        <h2><i data-lucide="bot"></i> Agentes <button id="btnNewAgent" class="linkbtn" title="Novo agente"><i data-lucide="plus"></i>novo</button></h2>
+        <h2><i data-lucide="bot"></i> <span data-i18n="side.agents">Agentes</span> <button id="btnNewAgent" class="linkbtn" title="Novo agente"><i data-lucide="plus"></i>novo</button></h2>
         <div id="mainAgentCard"></div>
         <div id="agentList" class="agentlist"></div>
         <form id="agentForm" hidden>
@@ -70,7 +70,7 @@
       </section>
 
       <section class="side-block min" id="musicSide">
-        <h2 id="musicSideHead" title="Mostrar/ocultar player"><i data-lucide="music"></i> Música <span id="sbDot" class="mside-dot" data-state="idle"></span><button id="sbToggle" class="linkbtn" title="Mostrar/ocultar player"><i data-lucide="chevron-down"></i></button></h2>
+        <h2 id="musicSideHead" title="Mostrar/ocultar player"><i data-lucide="music"></i> <span data-i18n="side.music">Música</span> <span id="sbDot" class="mside-dot" data-state="idle"></span><button id="sbToggle" class="linkbtn" title="Mostrar/ocultar player"><i data-lucide="chevron-down"></i></button></h2>
         <div class="mside-body">
           <div class="mside-card">
             <div class="mside-cover" id="sbCover"><i data-lucide="music"></i></div>
@@ -95,11 +95,11 @@
       </section>
 
       <section class="side-block min" id="skillsSide">
-        <h2 id="skillsSideHead" title="Mostrar/ocultar skills"><i data-lucide="layers"></i> Skills ativas <button id="skToggle" class="linkbtn" title="Mostrar/ocultar skills"><i data-lucide="chevron-down"></i></button></h2>
+        <h2 id="skillsSideHead" title="Mostrar/ocultar skills"><i data-lucide="layers"></i> <span data-i18n="side.skills">Skills ativas</span> <button id="skToggle" class="linkbtn" title="Mostrar/ocultar skills"><i data-lucide="chevron-down"></i></button></h2>
         <div id="sideSkills" class="miniskills"></div>
       </section>
       <section class="side-block" id="sysmon">
-        <div class="sm-head"><i data-lucide="activity"></i><b>Sistema</b><span class="sm-live"></span><span class="sm-cores" id="smCpuCores">—</span><button id="smToggle" class="sm-toggle" title="Mostrar/ocultar detalhes"><i data-lucide="monitor"></i></button></div>
+        <div class="sm-head"><i data-lucide="activity"></i><b data-i18n="side.system">Sistema</b><span class="sm-live"></span><span class="sm-cores" id="smCpuCores">—</span><button id="smToggle" class="sm-toggle" title="Mostrar/ocultar detalhes"><i data-lucide="monitor"></i></button></div>
         <div class="sm-body">
           <div class="sm-row"><span>CPU</span><div class="sm-bar"><i id="smCpuBar"></i></div><b id="smCpu">—</b></div>
           <div class="sm-sub" id="smCpuSub">medindo…</div>
@@ -154,7 +154,7 @@
         </div>
         <div class="ci-wrap">
           <div id="skillMentionPop" hidden></div>
-          <textarea id="input" rows="1" placeholder="Pergunte, peça pesquisa, rotina…  @slug invoca uma skill  ·  Enter envia · Shift+Enter quebra"></textarea>
+          <textarea id="input" rows="1" data-i18n-ph="c.ph" placeholder="Pergunte, peça pesquisa, rotina…  @slug invoca uma skill  ·  Enter envia · Shift+Enter quebra"></textarea>
         </div>
         <button type="submit" id="btnSend" class="btn primary icon-only" title="Enviar"><i data-lucide="send"></i></button>
       </form>
@@ -171,19 +171,19 @@
         <div class="cx-sub"><span id="cxDate">—</span><span id="cxTemp"><span class="cx-na">—°</span></span></div>
       </div>
       <nav class="tabs">
-        <button data-tab="routines" class="active"><i data-lucide="alarm-clock"></i>Rotinas</button>
-        <button data-tab="music"><i data-lucide="music"></i>Música</button>
-        <button data-tab="skills"><i data-lucide="sparkles"></i>Skills</button>
-        <button data-tab="tasks"><i data-lucide="list-checks"></i>Tarefas</button>
-        <button data-tab="reminders"><i data-lucide="bell"></i>Lembretes</button>
-        <button data-tab="log"><i data-lucide="terminal"></i>Log</button>
-        <button data-tab="notes"><i data-lucide="sticky-note"></i>Notas</button>
+        <button data-tab="routines" class="active"><i data-lucide="alarm-clock"></i><span data-i18n="tab.routines">Rotinas</span></button>
+        <button data-tab="music"><i data-lucide="music"></i><span data-i18n="tab.music">Música</span></button>
+        <button data-tab="skills"><i data-lucide="sparkles"></i><span data-i18n="tab.skills">Skills</span></button>
+        <button data-tab="tasks"><i data-lucide="list-checks"></i><span data-i18n="tab.tasks">Tarefas</span></button>
+        <button data-tab="reminders"><i data-lucide="bell"></i><span data-i18n="tab.reminders">Lembretes</span></button>
+        <button data-tab="log"><i data-lucide="terminal"></i><span data-i18n="tab.log">Log</span></button>
+        <button data-tab="notes"><i data-lucide="sticky-note"></i><span data-i18n="tab.notes">Notas</span></button>
         <button data-tab="extra1"><i data-lucide="rocket"></i></button>
         <button data-tab="extra2"><i data-lucide="zap"></i></button>
       </nav>
 
       <div class="tabpage" id="tab-routines">
-        <div class="tabhead"><h3>Rotinas agendadas</h3><button id="btnNewRoutine" class="btn primary sm"><i data-lucide="plus"></i>Nova rotina</button></div>
+        <div class="tabhead"><h3 data-i18n="head.routines">Rotinas agendadas</h3><button id="btnNewRoutine" class="btn primary sm"><i data-lucide="plus"></i><span data-i18n="head.newRoutine">Nova rotina</span></button></div>
         <div id="routineList"></div>
         <form id="routineForm" hidden>
           <h4 id="routineFormTitle">Nova rotina</h4>
@@ -191,7 +191,7 @@
           <div class="grid2">
             <label class="fld"><span>Hora</span><input id="rTime" type="time" value="08:00" /></label>
             <label class="fld"><span>Repetir</span>
-              <select id="rRepeat"><option value="daily">Todo dia</option><option value="weekdays">Seg–Sex</option><option value="weekends">Fim de semana</option><option value="once">Uma vez</option></select>
+              <select id="rRepeat"><option value="daily" data-i18n="r.daily">Todo dia</option><option value="weekdays" data-i18n="r.weekdays">Seg–Sex</option><option value="weekends" data-i18n="r.weekends">Fim de semana</option><option value="once" data-i18n="r.once">Uma vez</option></select>
             </label>
           </div>
           <div class="days" id="rDays">
@@ -205,14 +205,14 @@
             <code>prompt: instrução p/ IA</code> <code>abrir: URL</code> <code>skill: nome-da-skill</code>
           </div>
           <div class="btnrow">
-            <button type="submit" class="btn primary sm"><i data-lucide="save"></i>Salvar rotina</button>
-            <button type="button" id="btnCancelRoutine" class="btn ghost sm">Cancelar</button>
+            <button type="submit" class="btn primary sm"><i data-lucide="save"></i><span data-i18n="r.save">Salvar rotina</span></button>
+            <button type="button" id="btnCancelRoutine" class="btn ghost sm" data-i18n="r.cancel">Cancelar</button>
           </div>
         </form>
       </div>
 
       <div class="tabpage" id="tab-skills" hidden>
-        <div class="tabhead"><h3>Catálogo de Skills</h3><button id="btnNewSkill" class="btn primary sm"><i data-lucide="plus"></i>Nova skill</button></div>
+        <div class="tabhead"><h3 data-i18n="head.skills">Catálogo de Skills</h3><button id="btnNewSkill" class="btn primary sm"><i data-lucide="plus"></i><span data-i18n="head.newSkill">Nova skill</span></button></div>
         <p class="hint">Skills são capacidades plugáveis que a IA pode invocar. Edite, ative/desative ou crie as suas — no chat, use <code>@slug-da-skill</code> p/ invocar direto.</p>
         <div id="skillList"></div>
         <form id="skillForm" hidden>
@@ -240,24 +240,24 @@
       </div>
 
       <div class="tabpage" id="tab-tasks" hidden>
-        <div class="tabhead"><h3>Tarefas com IA</h3><button id="btnNewTask" class="btn primary sm"><i data-lucide="plus"></i>Nova tarefa</button></div>
+        <div class="tabhead"><h3 data-i18n="head.tasks">Tarefas com IA</h3><button id="btnNewTask" class="btn primary sm"><i data-lucide="plus"></i><span data-i18n="head.newTask">Nova tarefa</span></button></div>
         <form id="taskForm">
           <div class="taskrow">
             <input id="tText" placeholder="Ex.: pesquisar lançamentos de IA… às 9h me avise" />
-            <button class="btn primary sm" type="submit">Adicionar</button>
+            <button class="btn primary sm" type="submit" data-i18n="task.add">Adicionar</button>
           </div>
         </form>
         <div id="taskList"></div>
       </div>
 
       <div class="tabpage" id="tab-reminders" hidden>
-        <div class="tabhead"><h3>Lembretes</h3><button id="btnNewReminder" class="btn primary sm"><i data-lucide="plus"></i>Novo</button></div>
-        <p class="hint">Peça no chat: “me lembre às 14:30 de beber água”. Disparam com aviso + voz, mesmo sem IA.</p>
+        <div class="tabhead"><h3 data-i18n="head.reminders">Lembretes</h3><button id="btnNewReminder" class="btn primary sm"><i data-lucide="plus"></i><span data-i18n="head.new">Novo</span></button></div>
+        <p class="hint" data-i18n="rm.hint">Peça no chat: “me lembre às 14:30 de beber água”. Disparam com aviso + voz, mesmo sem IA.</p>
         <form id="reminderForm" hidden>
           <div class="grid2">
             <label class="fld"><span>Hora</span><input id="rmTime" type="time" /></label>
             <label class="fld"><span>Repetir</span>
-              <select id="rmRepeat"><option value="once">Uma vez</option><option value="daily">Todo dia</option></select>
+              <select id="rmRepeat"><option value="once" data-i18n="r.once">Uma vez</option><option value="daily" data-i18n="r.daily">Todo dia</option></select>
             </label>
           </div>
           <label class="fld"><span>Aviso</span><input id="rmText" placeholder="Beber água" /></label>
@@ -299,7 +299,7 @@
         <div id="traceLog"></div>
       </div>
       <div class="tabpage" id="tab-notes" hidden>
-        <div class="tabhead"><h3>Notas</h3><button id="btnNewNote" class="btn primary sm"><i data-lucide="plus"></i>Nova nota</button></div>
+        <div class="tabhead"><h3 data-i18n="head.notes">Notas</h3><button id="btnNewNote" class="btn primary sm"><i data-lucide="plus"></i><span data-i18n="head.newNote">Nova nota</span></button></div>
         <form id="noteForm" hidden>
           <h4 id="noteFormTitle">Nova nota</h4>
           <label class="fld"><span>Título</span><input id="nTitle" placeholder="Título da nota" /></label>
@@ -372,17 +372,25 @@
   <span class="vf-bar"><i id="voiceProg"></i></span>
 </div>
 
-<!-- Modal configurações -->
+<!-- Modal configurações (fullscreen) -->
 <div id="settingsModal" class="modal" hidden>
-  <div class="modal-card glass-card wide">
-    <div class="modal-head">
-      <h3><i data-lucide="settings"></i> Configurações</h3>
+  <div class="modal-card glass-card set-shell">
+    <div class="modal-head set-head">
+      <h3><i data-lucide="settings"></i> <span data-i18n="set.title">Configurações</span></h3>
       <button id="settingsClose" class="btn ghost sm icon-only"><i data-lucide="x"></i></button>
     </div>
+    <div class="set-body">
+      <nav class="set-nav">
+        <button data-sec="secConn" class="on"><i data-lucide="cpu"></i><span data-i18n="set.navConn">Conexão &amp; Modelo</span></button>
+        <button data-sec="secLook"><i data-lucide="palette"></i><span data-i18n="set.navLook">Aparência &amp; Fundo</span></button>
+        <button data-sec="secData"><i data-lucide="database"></i><span data-i18n="set.navData">Meus dados</span></button>
+        <button data-sec="secCode"><i data-lucide="code"></i><span data-i18n="set.navCode">Coding Agent</span></button>
+      </nav>
+      <div class="set-content" id="setContent">
     <div class="setgrid">
-      <section class="set-block">
-        <h2><i data-lucide="cpu"></i> Conexão &amp; Modelo</h2>
-        <label class="fld"><span>Provedor</span>
+      <section class="set-block" id="secConn">
+        <h2><i data-lucide="cpu"></i> <span data-i18n="set.navConn">Conexão &amp; Modelo</span></h2>
+        <label class="fld"><span data-i18n="set.provider">Provedor</span>
           <select id="provider">
             <option value="groq">Groq · ultra-rápido, grátis</option>
             <option value="openai">OpenAI</option>
@@ -393,10 +401,10 @@
             <option value="openrouter">OpenRouter / Compatível</option>
           </select>
         </label>
-        <label class="fld"><span>Modelo <button type="button" id="btnModels" class="linkbtn" title="Buscar modelos disponíveis para esta chave"><i data-lucide="refresh-cw"></i>atualizar</button></span>
+        <label class="fld"><span><span data-i18n="set.model">Modelo</span> <button type="button" id="btnModels" class="linkbtn" title="Buscar modelos disponíveis para esta chave"><i data-lucide="refresh-cw"></i><span data-i18n="set.refresh">atualizar</span></button></span>
           <select id="model"></select>
         </label>
-        <label class="fld"><span>API Key <em id="keyHint">só no seu navegador</em></span>
+        <label class="fld"><span>API Key <em id="keyHint" data-i18n="set.keyOnly">só no seu navegador</em></span>
           <div class="keyrow">
             <input id="apiKey" type="password" placeholder="gsk_… · sk-… · AIza…" autocomplete="off" />
             <button id="toggleKey" class="btn ghost sm icon-only" title="mostrar/ocultar"><i data-lucide="eye"></i></button>
@@ -406,92 +414,100 @@
           <input id="baseUrl" type="text" placeholder="http://localhost:11434 · LM Studio: http://localhost:1234/v1" />
         </label>
         <div class="sliderow">
-          <div class="fld grow"><span>Temperatura <b id="tempVal">0.7</b></span>
+          <div class="fld grow"><span><span data-i18n="set.temp">Temperatura</span> <b id="tempVal">0.7</b></span>
             <input id="temperature" type="range" min="0" max="2" step="0.1" value="0.7" />
           </div>
-          <div class="fld grow"><span>Máx tokens <b id="tokVal">2048</b></span>
+          <div class="fld grow"><span><span data-i18n="set.maxTok">Máx tokens</span> <b id="tokVal">2048</b></span>
             <input id="maxTokens" type="range" min="256" max="8192" step="256" value="2048" />
           </div>
         </div>
         <div class="btnrow">
-          <button id="btnSaveKeys" class="btn primary sm"><i data-lucide="save"></i>Salvar</button>
-          <button id="btnTest" class="btn ghost sm"><i data-lucide="zap"></i>Testar conexão</button>
+          <button id="btnSaveKeys" class="btn primary sm"><i data-lucide="save"></i><span data-i18n="set.save">Salvar</span></button>
+          <button id="btnTest" class="btn ghost sm"><i data-lucide="zap"></i><span data-i18n="set.test">Testar conexão</span></button>
         </div>
-        <p class="hint"><i data-lucide="lock"></i> As chaves ficam em <code>localStorage</code>. Nada sai do seu PC exceto chamadas diretas às APIs oficiais. <a href="#" id="linkKeys">Onde conseguir chaves</a></p>
+        <p class="hint"><i data-lucide="lock"></i> <span data-i18n="set.lockHint">As chaves ficam em <code>localStorage</code>. Nada sai do seu PC exceto chamadas diretas às APIs oficiais.</span> <a href="#" id="linkKeys" data-i18n="set.whereKeys">Onde conseguir chaves</a></p>
       </section>
-      <section class="set-block">
-        <h2><i data-lucide="palette"></i> Aparência &amp; Fundo</h2>
-        <label class="fld"><span>Tema</span>
+      <section class="set-block" id="secLook">
+        <h2><i data-lucide="palette"></i> <span data-i18n="set.navLook">Aparência &amp; Fundo</span></h2>
+        <label class="fld"><span data-i18n="set.lang">Idioma</span>
+          <select id="uiLang">
+            <option value="pt-BR">Português (Brasil)</option>
+            <option value="es">Español</option>
+            <option value="en">English</option>
+          </select>
+        </label>
+        <label class="fld"><span data-i18n="set.theme">Tema</span>
           <span class="segmented" id="themeSwitch" role="tablist" aria-label="Tema" style="display:flex">
             <button data-set-theme="light" title="Light"><i data-lucide="sun"></i>Light</button>
             <button data-set-theme="dark" title="Dark"><i data-lucide="moon"></i>Dark</button>
             <button data-set-theme="glass" class="active" title="Glass translúcido"><i data-lucide="sparkles"></i>Glass</button>
           </span>
         </label>
-        <label class="fld"><span>Plano de fundo</span>
+        <label class="fld"><span data-i18n="set.bg">Plano de fundo</span>
           <select id="bgSelect">
             <option value="combo">Núcleo 3D + Aurora</option>
-            <option value="3d">Só Núcleo 3D</option>
-            <option value="aurora">Só Aurora</option>
-            <option value="custom">Imagem personalizada</option>
-            <option value="none">Nenhum (liso)</option>
+            <option value="3d" data-i18n="set.bgOpt2">Só Núcleo 3D</option>
+            <option value="aurora" data-i18n="set.bgOpt3">Só Aurora</option>
+            <option value="preset" data-i18n="set.bgPreset">Galeria</option>
+            <option value="custom" data-i18n="set.bgOpt4">Imagem personalizada</option>
+            <option value="none" data-i18n="set.bgOpt5">Nenhum (liso)</option>
           </select>
         </label>
-        <label class="fld" id="bgUploadWrap" hidden><span>Enviar imagem</span>
+        <label class="fld" id="bgUploadWrap" hidden><span data-i18n="set.upload">Enviar imagem</span>
           <input id="bgUpload" type="file" accept="image/*" />
         </label>
-        <div class="fld"><span>Galeria (toque para aplicar)</span>
+        <div class="fld"><span data-i18n="set.gallery">Galeria (toque para aplicar)</span>
           <div id="bgPresets" class="presets"></div>
         </div>
-        <div class="fld"><span>Desfoque do fundo <b id="bgBlurVal">6px</b></span>
+        <div class="fld"><span><span data-i18n="set.blur">Desfoque do fundo</span> <b id="bgBlurVal">6px</b></span>
           <input id="bgBlur" type="range" min="0" max="24" value="6" />
         </div>
-        <label class="fld"><span>Tela de descanso</span>
+        <label class="fld"><span data-i18n="set.rest">Tela de descanso</span>
           <select id="restMinutes">
-            <option value="0">Desligada</option>
-            <option value="1">Após 1 min parado</option>
-            <option value="3">Após 3 min parado</option>
-            <option value="5" selected>Após 5 min parado</option>
-            <option value="10">Após 10 min parado</option>
+            <option value="0" data-i18n="set.rest0">Desligada</option>
+            <option value="1" data-i18n="set.rest1">Após 1 min parado</option>
+            <option value="3" data-i18n="set.rest3">Após 3 min parado</option>
+            <option value="5" selected data-i18n="set.rest5">Após 5 min parado</option>
+            <option value="10" data-i18n="set.rest10">Após 10 min parado</option>
           </select>
         </label>
-        <div class="fld"><span>Intensidade 3D <b id="fxVal">70%</b></span>
+        <div class="fld"><span><span data-i18n="set.fx">Intensidade 3D</span> <b id="fxVal">70%</b></span>
           <input id="fxIntensity" type="range" min="0" max="100" value="70" />
         </div>
         <div class="btnrow">
-          <button id="btnFxToggle" class="btn ghost sm"><i data-lucide="pause"></i>Pausar fundo</button>
+          <button id="btnFxToggle" class="btn ghost sm"><i data-lucide="pause"></i><span data-i18n="set.pauseBg">Pausar fundo</span></button>
         </div>
       </section>
-      <section class="set-block">
-        <h2><i data-lucide="database"></i> Meus dados</h2>
-        <p class="hint" style="margin-top:0">Backup de provedores, rotinas, skills e tarefas em JSON.</p>
+      <section class="set-block" id="secData">
+        <h2><i data-lucide="database"></i> <span data-i18n="set.navData">Meus dados</span></h2>
+        <p class="hint" style="margin-top:0" data-i18n="set.dataHint">Backup de provedores, rotinas, skills e tarefas em JSON.</p>
         <div class="btnrow">
-          <button id="btnExport" class="btn ghost sm"><i data-lucide="download"></i>Exportar</button>
-          <button id="btnImport" class="btn ghost sm"><i data-lucide="upload"></i>Importar</button>
+          <button id="btnExport" class="btn ghost sm"><i data-lucide="download"></i><span data-i18n="set.export">Exportar</span></button>
+          <button id="btnImport" class="btn ghost sm"><i data-lucide="upload"></i><span data-i18n="set.import">Importar</span></button>
           <input type="file" id="importFile" accept="application/json" hidden />
         </div>
-        <div class="fld" style="margin-top:10px"><span>Pasta de trabalho (arquivos)</span>
+        <div class="fld" style="margin-top:10px"><span data-i18n="set.workDir">Pasta de trabalho (arquivos)</span>
           <div class="btnrow">
-            <button id="btnWorkDir" class="btn ghost sm"><i data-lucide="folder"></i>Autorizar pasta</button>
+            <button id="btnWorkDir" class="btn ghost sm"><i data-lucide="folder"></i><span data-i18n="set.authDir">Autorizar pasta</span></button>
           </div>
           <p class="hint" id="workDirLabel">Nenhuma pasta autorizada.</p>
         </div>
       </section>
-      <section class="set-block">
-        <h2><i data-lucide="code"></i> Coding Agent</h2>
-        <label class="fld"><span>Modo</span>
+      <section class="set-block" id="secCode">
+        <h2><i data-lucide="code"></i> <span data-i18n="set.navCode">Coding Agent</span></h2>
+        <label class="fld"><span data-i18n="set.mode">Modo</span>
           <span class="segmented" id="codeModeSwitch" role="tablist" aria-label="Modo" style="display:flex">
             <button data-code-mode="plan" title="Só leitura + planejamento"><i data-lucide="eye"></i>Plan</button>
             <button data-code-mode="build" title="Permite escrita conforme permissões"><i data-lucide="hammer"></i>Build</button>
           </span>
         </label>
-        <label class="fld"><span>Workspace (pasta do projeto)</span>
+        <label class="fld"><span data-i18n="set.workspace">Workspace (pasta do projeto)</span>
           <div class="btnrow">
-            <button id="btnCodeWorkDir" class="btn ghost sm"><i data-lucide="folder"></i>Autorizar pasta</button>
+            <button id="btnCodeWorkDir" class="btn ghost sm"><i data-lucide="folder"></i><span data-i18n="set.authDir">Autorizar pasta</span></button>
           </div>
           <p class="hint" id="codeWorkDirLabel">Usa a mesma pasta autorizada acima.</p>
         </label>
-        <div class="fld"><span>Permissões por ferramenta</span>
+        <div class="fld"><span data-i18n="set.perms">Permissões por ferramenta</span>
           <div id="codePerms"></div>
         </div>
         <div class="grid2">
@@ -499,11 +515,13 @@
           <label class="fld"><span>Bridge token</span><input id="codeBridgeToken" type="password" placeholder="impresso pelo bridge.py" autocomplete="off" /></label>
         </div>
         <div class="btnrow">
-          <button id="btnCodeBridgeTest" class="btn ghost sm"><i data-lucide="zap"></i>Testar bridge</button>
-          <button id="btnCodeUndo" class="btn ghost sm"><i data-lucide="undo-2"></i>Desfazer <b id="codeUndoCount" class="pill">0</b></button>
+          <button id="btnCodeBridgeTest" class="btn ghost sm"><i data-lucide="zap"></i><span data-i18n="set.testBridge">Testar bridge</span></button>
+          <button id="btnCodeUndo" class="btn ghost sm"><i data-lucide="undo-2"></i><span data-i18n="set.undo">Desfazer</span> <b id="codeUndoCount" class="pill">0</b></button>
         </div>
-        <p class="hint"><i data-lucide="lock"></i> Escrita restrita à pasta autorizada. Sem bridge, shell é negado. Rode <code>python3 bridge.py</code> na pasta do projeto p/ liberar shell local.</p>
+        <p class="hint"><i data-lucide="lock"></i> <span data-i18n="set.codingHint">Escrita restrita à pasta autorizada. Sem bridge, shell é negado. Rode <code>python3 bridge.py</code> na pasta do projeto p/ liberar shell local.</span></p>
       </section>
+    </div>
+      </div>
     </div>
   </div>
 </div>
@@ -559,6 +577,7 @@
 <script type="module" src="js/v2-bridge.js"></script>
 <script src="js/code-agent.js"></script>
 <script src="js/sandbox.js"></script>
+<script src="js/i18n.js"></script>
 <script src="js/app.js"></script>
 <script src="js/clockwx.js"></script>
 <script src="js/voice.js"></script>

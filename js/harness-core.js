@@ -3,6 +3,7 @@
 */
 'use strict';
 import { buildToolsSection, parseToolCall } from './tools-registry.js';
+const PL = () => (typeof window !== 'undefined' && window.I18N && window.I18N.promptLang) ? window.I18N.promptLang() : 'pt-BR';
 import { buildBudget, summarizeOld } from './context-budget.js';
 import { verifyFinal } from './verifiers.js';
 import { sandboxCheck, requestApproval } from './gate.js';
@@ -85,7 +86,7 @@ export async function runReAct(userText, deps) {
   const wsNote = deps.workspace
     ? `\n[WORKSPACE ativo: ${deps.workspace} — arquivos do projeto via code_read/code_list/code_glob/code_grep/code_write/code_edit/code_bash.]`
     : `\n[Sem workspace autorizado: se pedir criar/ler/editar código, use code_* mesmo assim (o sistema orienta a autorizar a pasta) ou explique Configurações → Coding → Autorizar pasta.]`;
-  const systemBase = `Você é o My OS. Responda em pt-BR, direto.\n${toolsSection}${wsNote}\nRegra: se dá p/ responder direto, RESPONDA DIRETO sem tool. Só chame tool se pedir dado externo/ação. 1 tool por turno ou resposta final. Máx ${LIMITS.maxSteps} passos. NUNCA use JSON {"name":...} — só <tool name="...">. Antes de responder, confira: cumpri o pedido? citei links reais só se pesquisei?`;
+  const systemBase = `Você é o My OS. Responda em ${PL()}, direto.\n${toolsSection}${wsNote}\nRegra: se dá p/ responder direto, RESPONDA DIRETO sem tool. Só chame tool se pedir dado externo/ação. 1 tool por turno ou resposta final. Máx ${LIMITS.maxSteps} passos. NUNCA use JSON {"name":...} — só <tool name="...">. Antes de responder, confira: cumpri o pedido? citei links reais só se pesquisei?`;
   const toolOutputs = [];
   const toolsUsed = [];
   const searchQs = [];
@@ -100,7 +101,7 @@ export async function runReAct(userText, deps) {
   async function runToolCall(tool, step) {
     if ((tool.name === 'web_search' || tool.name === 'web_open') && !needsToolFor()) {
       trace({ kind: 'tool-skip-unneeded', step, tool: tool.name });
-      toolOutputs.push(`[Tool ${tool.name} ignorada — pedido não exige dado externo. Responda direto em pt-BR.]`);
+      toolOutputs.push(`[Tool ${tool.name} ignorada — pedido não exige dado externo. Responda direto em ${PL()}.]`);
       return;
     }
     // Anti-loop com memória: mesma pergunta pode repetir (cache do execTool devolve na hora);
@@ -140,7 +141,7 @@ export async function runReAct(userText, deps) {
     const msgs = [
       { role: 'system', content: systemBase + (summary ? `\n[RESUMO]\n${summary}` : '') },
       ...budget.tail.map(m => ({ role: m.role, content: m.content })),
-      ...(step === 1 ? [{ role: 'user', content: userText }] : [{ role: 'user', content: step >= LIMITS.maxSteps - 2 ? `[RESULTADO]\n${budget.result}\nResponda final AGORA em pt-BR com os dados acima, citando links. NÃO chame tool.` : `[RESULTADO]\n${budget.result}\nResponda final com fontes ou chame 1 tool.` }]),
+      ...(step === 1 ? [{ role: 'user', content: userText }] : [{ role: 'user', content: step >= LIMITS.maxSteps - 2 ? `[RESULTADO]\n${budget.result}\nResponda final AGORA em ${PL()} com os dados acima, citando links. NÃO chame tool.` : `[RESULTADO]\n${budget.result}\nResponda final com fontes ou chame 1 tool.` }]),
     ];
     const s = performance.now();
     let out;
@@ -200,7 +201,7 @@ export async function runReAct(userText, deps) {
       try {
         const forced = await callWithTimeout(callLLM, [
           { role: 'system', content: systemBase },
-          { role: 'user', content: `Pedido original: ${userText}\n\nDados já obtidos:\n${realCorpus(toolOutputs).slice(0, 6000)}\n\nResponda final AGORA em pt-BR, em tópicos curtos, citando os links acima. NÃO chame tool. NÃO use JSON.` },
+          { role: 'user', content: `Pedido original: ${userText}\n\nDados já obtidos:\n${realCorpus(toolOutputs).slice(0, 6000)}\n\nResponda final AGORA em ${PL()}, em tópicos curtos, citando os links acima. NÃO chame tool. NÃO use JSON.` },
         ]);
         // Se mesmo forçado o modelo cuspiu tool crua, descarta e usa fallback com dados reais.
         if (parseToolCall(forced)) {

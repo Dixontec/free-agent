@@ -125,7 +125,7 @@ const PROVIDERS = {
   openrouter:{ label: 'OpenRouter', url: 'https://openrouter.ai/api/v1/chat/completions', kind: 'openai',
                models: ['meta-llama/llama-3.3-70b-instruct', 'google/gemini-2.0-flash-001', 'anthropic/claude-3.5-sonnet', 'openai/gpt-4o-mini'] }
 };
-const cfg = Object.assign({ provider: 'groq', model: 'llama-3.3-70b-versatile', baseUrl: '', temperature: 0.7, maxTokens: 2048 },
+const cfg = Object.assign({ provider: 'groq', model: 'llama-3.3-70b-versatile', baseUrl: '', temperature: 0.7, maxTokens: 2048, lang: 'pt-BR' },
   store.get('cfg', {}));
 const keys = Object.assign({ groq: '', openai: '', gemini: '', anthropic: '', openrouter: '', ollama: '', lmstudio: '' }, store.get('keys', {}));
 
@@ -258,9 +258,36 @@ function saveCfg(silent) {
 $('#btnSaveKeys').onclick = () => { saveCfg(); fetchModels(true); };
 $('#linkKeys').onclick = e => { e.preventDefault(); $('#keysModal').hidden = false; icons(); };
 $('#keysClose').onclick = () => $('#keysModal').hidden = true;
-$('#btnSettings').onclick = () => { maskKeys(); $('#settingsModal').hidden = false; icons(); };
-$('#settingsClose').onclick = () => { maskKeys(); $('#settingsModal').hidden = true; };
-$('#settingsModal').addEventListener('click', e => { if (e.target === $('#settingsModal')) { maskKeys(); $('#settingsModal').hidden = true; } });
+function openSettings() { maskKeys(); const m = $('#settingsModal'); m.classList.remove('closing'); m.hidden = false; requestAnimationFrame(() => m.classList.add('show')); icons(); }
+function closeSettings() { const m = $('#settingsModal'); if (!m || m.hidden) return; maskKeys(); m.classList.remove('show'); m.classList.add('closing'); setTimeout(() => { m.hidden = true; m.classList.remove('closing'); }, 230); }
+$('#btnSettings').onclick = () => openSettings();
+$('#settingsClose').onclick = () => closeSettings();
+$('#settingsModal').addEventListener('click', e => { if (e.target === $('#settingsModal')) closeSettings(); });
+/* Navegação da tela de configurações (fullscreen) */
+$('#settingsModal .set-nav')?.addEventListener('click', e => {
+  const b = e.target.closest('button[data-sec]'); if (!b) return;
+  const c = $('#setContent'), el = document.getElementById(b.dataset.sec);
+  if (!c || !el) return;
+  c.scrollTo({ top: Math.max(0, el.offsetTop - 12), behavior: 'smooth' });
+});
+try {
+  const _sc = $('#setContent');
+  if (_sc && 'IntersectionObserver' in window) {
+    const _spy = new IntersectionObserver(entries => {
+      if ($('#settingsModal').hidden) return;
+      entries.forEach(en => {
+        if (!en.isIntersecting) return;
+        $$('#settingsModal .set-nav button').forEach(x => x.classList.toggle('on', x.dataset.sec === en.target.id));
+      });
+    }, { root: _sc, threshold: 0.25 });
+    ['secConn', 'secLook', 'secData', 'secCode'].forEach(id => { const el = document.getElementById(id); if (el) _spy.observe(el); });
+  }
+} catch {}
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  const s = $('#settingsModal'), u = $('#uiModal');
+  if (s && !s.hidden && (!u || u.hidden)) closeSettings();
+});
 
 function updateConn() {
   const p = cfg.provider, has = !!(keys[p] || p === 'ollama' || p === 'lmstudio');
@@ -352,7 +379,7 @@ async function callLLM(messages, opts = {}) {
         if (n && needsTool) return `<tool name="${n}">${String(arg).slice(0, 500)}</tool>`;
         // Tool sem necessidade → retry direto, sem [TOOLS], sem JSON, sem falhar o chat.
         const clean = messages.map(m => ({ role: m.role, content: String(m.content).replace(/<tool[\s\S]*?<\/tool>/gi, '').replace(/\[TOOLS\][\s\S]*?(?=\n\n|\Z)/, '').slice(0, 4000) }));
-        clean.unshift({ role: 'system', content: 'Responda em pt-BR, direto, sem chamar ferramentas, sem JSON, sem <tool>. Resposta final agora.' });
+        clean.unshift({ role: 'system', content: `Responda em ${PL()}, direto, sem chamar ferramentas, sem JSON, sem <tool>. Resposta final agora.` });
         const r2 = await fetch(url, { method: 'POST', headers,
           body: JSON.stringify({ model: cfg.model, temperature: 0.3, max_tokens: max, messages: clean }) });
         if (r2.ok) { const j2 = await r2.json(); return j2.choices?.[0]?.message?.content || '(vazio)'; }
@@ -363,7 +390,7 @@ async function callLLM(messages, opts = {}) {
       try {
         const clean = messages.map(m => ({ role: m.role, content: String(m.content).replace(/<tool[\s\S]*?<\/tool>/gi, '').slice(0, 4000) }));
         const r3 = await fetch(url, { method: 'POST', headers,
-          body: JSON.stringify({ model: cfg.model, temperature: 0.3, max_tokens: max, messages: [...clean, { role: 'user', content: 'Responda direto em pt-BR, sem ferramentas.' }] }) });
+          body: JSON.stringify({ model: cfg.model, temperature: 0.3, max_tokens: max, messages: [...clean, { role: 'user', content: `Responda direto em ${PL()}, sem ferramentas.` }] }) });
         if (r3.ok) { const j3 = await r3.json(); const c3 = j3.choices?.[0]?.message?.content; if (c3) return c3; }
       } catch {}
     }
@@ -398,6 +425,21 @@ $('#btnTest').onclick = async () => {
   coreIdle(); updateConn();
 };
 function setConn(state) { $('#connStatus').className = 'conn' + (state === 'ok' ? ' ok' : state === 'err' ? ' err' : ''); }
+/* Idioma da interface (i18n.js) */
+const PL = () => (window.I18N && window.I18N.promptLang) ? window.I18N.promptLang() : 'pt-BR';
+try {
+  const _ul = $('#uiLang');
+  if (_ul) {
+    _ul.value = (window.I18N && window.I18N.getLang()) || cfg.lang || 'pt-BR';
+    _ul.onchange = () => {
+      cfg.lang = _ul.value; store.set('cfg', cfg);
+      window.I18N.applyLang();
+      try { greetApply(greetFallback()); } catch {}
+      bootGreeting();
+      toast('languages', 'Idioma: <b>' + _ul.value + '</b>');
+    };
+  }
+} catch {}
 
 /* ───────── CHAT ───────── */
 /* ───────── CONVERSAS & MEMÓRIA ───────── */
@@ -775,13 +817,13 @@ $('#composer').addEventListener('submit', async e => {
           if (name === 'open_site') {
             const ytHit = await tryYouTubeFirst(arg);
             if (ytHit) {
-              result = `O vídeo "${ytHit.title}" (${ytHit.url}) está tocando no monitor à direita. Confirme brevemente em português.`;
+              result = `O vídeo "${ytHit.title}" (${ytHit.url}) está tocando no monitor à direita. Confirme brevemente em ${PL()}.`;
               doneMsg = `Tocando: ${ytHit.title}.`;
             } else {
             const target = resolveSite(arg);
             if (!target) throw new Error('não identifiquei o site — me diga nome ou link');
             openSiteFlow(target, 'harness v2');
-            result = `O site "${target.name}" (${target.url}) já foi exibido no chat. Confirme brevemente em português.`;
+            result = `O site "${target.name}" (${target.url}) já foi exibido no chat. Confirme brevemente em ${PL()}.`;
             doneMsg = `Aberto: ${target.name}.`;
             }
           } else if (name === 'run_skill') {
@@ -793,12 +835,12 @@ $('#composer').addEventListener('submit', async e => {
               awStep(aw, `<div class="awline">${ic('chevron-right')}<span>Aplicando prompt da skill <b>${escapeHtml(sk.title)}</b>…</span></div>`);
               try {
                 result = await callLLM([
-                  { role: 'system', content: sk.prompt + '\nResponda sempre em português, de forma direta e útil.' },
+                  { role: 'system', content: sk.prompt + '\nResponda sempre em ' + PL() + ', de forma direta e útil.' },
                   { role: 'user', content: text },
                 ]);
               } catch { result = `Skill "${sk.title}" executada${sk.action ? ' (ações aplicadas)' : ''}, mas o modelo da skill não respondeu. Resuma o que foi feito.`; }
             } else {
-              result = `A skill "${sk.title}" (${sk.slug}) foi executada e os resultados já apareceram no chat. Resuma em português.`;
+              result = `A skill "${sk.title}" (${sk.slug}) foi executada e os resultados já apareceram no chat. Resuma em ${PL()}.`;
             }
             doneMsg = `Skill ${sk.title} aplicada.`;
           } else {
@@ -847,7 +889,7 @@ $('#composer').addEventListener('submit', async e => {
     const wsNote = wsH
       ? `\n\n[WORKSPACE ativo: ${wsH.name} — arquivos do projeto via code_read/code_list/code_glob/code_grep/code_write/code_edit/code_bash.]`
       : `\n\n[Sem workspace autorizado: se pedir criar/ler/editar código, use code_* mesmo assim (o sistema orienta a autorizar a pasta) ou explique Configurações → Coding → Autorizar pasta.]`;
-    const sys = 'Você é o My OS, harness de IA premium. Responda em português, direto e útil, com formatação leve (negrito, listas, código quando preciso).' + TOOLS_SYS + wsNote
+    const sys = 'Você é o My OS, harness de IA premium. Responda em ' + PL() + ', direto e útil, com formatação leve (negrito, listas, código quando preciso).' + TOOLS_SYS + wsNote
       + (_main.personality ? `\n\n[AGENTE PRINCIPAL ${_main.name}: ${_main.personality}]` : '')
       + skillsCtx()
       + (skill ? `\n\n[SKILL ATIVA: ${skill.title}] ${skill.prompt}` : '');
@@ -871,7 +913,7 @@ $('#composer').addEventListener('submit', async e => {
             awStep(aw, `<div class="awline">${ic('chevron-right')}<span>Tocando <b>${escapeHtml(ytHit.title)}</b> no monitor…</span></div>`);
             coreWinDone(twin, 'Vídeo no monitor.');
             awDone(aw, `Tocando: ${ytHit.title}.`);
-            result = `O vídeo "${ytHit.title}" (${ytHit.url}) está tocando no monitor à direita. Confirme brevemente em português.`;
+            result = `O vídeo "${ytHit.title}" (${ytHit.url}) está tocando no monitor à direita. Confirme brevemente em ${PL()}.`;
           } else {
           const target = resolveSite(tool.arg);
           if (!target) throw new Error('não identifiquei o site — me diga nome ou link');
@@ -879,7 +921,7 @@ $('#composer').addEventListener('submit', async e => {
           openSiteFlow(target, 'navegador Nexus');
           coreWinDone(twin, 'Site exibido no chat.');
           awDone(aw, `Aberto: ${target.name}.`);
-          result = `O site "${target.name}" (${target.url}) já foi exibido no chat para o usuário. Confirme brevemente em português e ofereça ajuda adicional.`;
+          result = `O site "${target.name}" (${target.url}) já foi exibido no chat para o usuário. Confirme brevemente em ${PL()} e ofereça ajuda adicional.`;
           }
         } else if (tool.name === 'run_skill') {
           const sk = getSkills().find(x => x.slug === tool.arg.toLowerCase() || x.title.toLowerCase() === tool.arg.toLowerCase());
@@ -891,12 +933,12 @@ $('#composer').addEventListener('submit', async e => {
             awStep(aw, `<div class="awline">${ic('chevron-right')}<span>Executando prompt da skill…</span></div>`);
             try {
               result = await callLLM([
-                { role: 'system', content: sk.prompt + '\nResponda sempre em português, de forma direta e útil.' },
+                { role: 'system', content: sk.prompt + '\nResponda sempre em ' + PL() + ', de forma direta e útil.' },
                 { role: 'user', content: text },
               ]);
             } catch { result = `Skill "${sk.title}" executada, mas o modelo da skill não respondeu.`; }
           } else if (sk.action) {
-            result = `A skill "${sk.title}" (${sk.slug}) foi executada no app e os resultados já apareceram no chat. Resuma ao usuário em português o que foi feito.`;
+            result = `A skill "${sk.title}" (${sk.slug}) foi executada no app e os resultados já apareceram no chat. Resuma ao usuário em ${PL()} o que foi feito.`;
           } else {
             awStep(aw, `<div class="awline"><span>Sem ação nem prompt configurados — respondendo no modo conversa dela.</span></div>`);
             result = `A skill "${sk.title}" foi invocada sem ação/prompt configurados. Pergunte ao usuário o que ele quer que ela faça.`;
@@ -1273,7 +1315,7 @@ async function runSkillMention(sk, task) {
   if (sk.prompt && t) {
     $('#typing').hidden = false;
     try {
-      const sent = [{ role: 'system', content: sk.prompt + '\nResponda sempre em português, de forma direta e útil.' }, { role: 'user', content: t }];
+      const sent = [{ role: 'system', content: sk.prompt + '\nResponda sempre em ' + PL() + ', de forma direta e útil.' }, { role: 'user', content: t }];
       const out = await callLLM(sent);
       trackLLM(sent, out);
       $('#typing').hidden = true;
@@ -1388,7 +1430,7 @@ $('#skillForm').onsubmit = e => {
   }
   const s = { slug, icon: $('#sIcon').value.trim().toLowerCase() || 'sparkles',
     title, desc: $('#sDesc').value.trim(),
-    prompt: $('#sPrompt').value.trim() || 'Seja útil e responda em português, de forma direta.',
+    prompt: $('#sPrompt').value.trim() || `Seja útil e responda em ${PL()}, de forma direta.`,
     action: $('#sAction').value.trim(), active: old ? old.active !== false : true };
   if (!/^[a-z-]+$/.test(s.icon)) s.icon = 'sparkles';
   if (oldIdx >= 0) all[oldIdx] = s; else all.push(s);
@@ -1401,12 +1443,7 @@ $('#skillForm').onsubmit = e => {
 
 /* ───────── ROTINAS ───────── */
 function getRoutines() {
-  const saved = store.get('routines', null);
-  if (saved) return saved.map(r => ({ ...r, name: cleanTxt(r.name) || 'Rotina' }));
-  return [
-    { id: 'r-manha', name: 'Rotina da manhã', time: '08:00', repeat: 'daily', days: [1,2,3,4,5], active: true, lastRun: '',
-      actions: ['musica: https://www.youtube.com/watch?v=jfKfPfyJRdk', 'noticias: tecnologia', 'prompt: Bom dia! Resuma as notícias acima e monte minha agenda de hoje com 3 prioridades.', 'abrir: https://gmail.com'] }
-  ];
+  return (store.get('routines', []) || []).map(r => ({ ...r, name: cleanTxt(r.name) || 'Rotina' }));
 }
 function saveRoutines(r) { store.set('routines', r); renderRoutines(); }
 function renderRoutines() {
@@ -1490,7 +1527,7 @@ async function runActionLine(line, origin, stepWin) {
   }
   else if (k === 'prompt' || k === 'ia' || k === 'perguntar') {
     $('#typing').hidden = false;
-    try { const sentR = [{ role: 'system', content: 'Você executa rotinas do My OS. Responda em português.' }, { role: 'user', content: val }];
+    try { const sentR = [{ role: 'system', content: `Você executa rotinas do My OS. Responda em ${PL()}.` }, { role: 'user', content: val }];
       const out = await callLLM(sentR);
       trackLLM(sentR, out);
       $('#typing').hidden = true; addMsg('ai', out, `<span class="src">rotina · ${escapeHtml(origin)} · ${PROVIDERS[cfg.provider].label}</span>`);
@@ -1840,7 +1877,7 @@ $('#btnModels').onclick = () => { saveCfg(true); fetchModels(false); };
 $('#btnModelsQuick').onclick = () => { saveCfg(true); fetchModels(false); };
 
 /* ───────── PLANO DE FUNDO (seleção + desfoque) ───────── */
-function getBg() { return Object.assign({ mode: 'combo', blur: 6, custom: '', preset: '' }, store.get('bg', {})); }
+function getBg() { return Object.assign({ mode: 'preset', preset: 'assets/bg-green.jpg', blur: 4, custom: '' }, store.get('bg', {})); }
 function applyBackground() {
   const bg = getBg();
   const show3d = bg.mode === 'combo' || bg.mode === '3d';
@@ -1868,7 +1905,7 @@ function applyBackground() {
   const bb = $('#bgBlur'); if (bb && +bb.value !== bg.blur) bb.value = bg.blur;
   if ($('#bgUploadWrap')) $('#bgUploadWrap').hidden = bg.mode !== 'custom';
 }
-$('#bgSelect').onchange = () => { const bg = getBg(); bg.mode = $('#bgSelect').value; store.set('bg', bg); applyBackground(); };
+$('#bgSelect').onchange = () => { const bg = getBg(); bg.mode = $('#bgSelect').value; if (bg.mode === 'preset' && !bg.preset) bg.preset = 'assets/bg-green.jpg'; store.set('bg', bg); applyBackground(); };
 $('#bgBlur').oninput = () => { const bg = getBg(); bg.blur = +$('#bgBlur').value; store.set('bg', bg); applyBackground(); };
 $('#bgUpload').onchange = e => {
   const f = e.target.files[0]; if (!f) return;
@@ -1916,12 +1953,8 @@ setInterval(() => {
 
 /* ───────── PRESETS DE FUNDO ───────── */
 const BG_PRESETS = [
-  { id: 'p1', kind: 'image', label: 'Neblina', src: 'https://picsum.photos/seed/myos-fog/1920/1080', thumb: 'https://picsum.photos/seed/myos-fog/320/200' },
-  { id: 'p2', kind: 'image', label: 'Montanhas', src: 'https://picsum.photos/seed/myos-peak/1920/1080', thumb: 'https://picsum.photos/seed/myos-peak/320/200' },
-  { id: 'p3', kind: 'image', label: 'Oceano', src: 'https://picsum.photos/seed/myos-sea/1920/1080', thumb: 'https://picsum.photos/seed/myos-sea/320/200' },
-  { id: 'p4', kind: 'image', label: 'Cidade', src: 'https://picsum.photos/seed/myos-city/1920/1080', thumb: 'https://picsum.photos/seed/myos-city/320/200' },
-  { id: 'v1', kind: 'video', label: 'Vídeo 1', src: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4' },
-  { id: 'v2', kind: 'video', label: 'Vídeo 2', src: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4' }
+  { id: 'green', kind: 'image', src: 'assets/bg-green.jpg', thumb: 'assets/bg-green.jpg' },
+  { id: 'pink', kind: 'image', src: 'assets/bg-pink.jpg', thumb: 'assets/bg-pink.jpg' }
 ];
 function renderPresets() {
   const box = $('#bgPresets');
@@ -1929,17 +1962,19 @@ function renderPresets() {
   const bg = getBg();
   box.innerHTML = '';
   BG_PRESETS.forEach(p => {
+    const label = (window.I18N && window.I18N.t) ? window.I18N.t('bg.' + p.id) : p.id;
     const b = document.createElement('button');
     b.type = 'button';
-    b.className = 'preset' + (((bg.mode === 'preset' || bg.mode === 'video') && bg.preset === p.src) ? ' on' : '');
-    b.title = p.label + (p.kind === 'video' ? ' (vídeo)' : '');
-    b.innerHTML = (p.kind === 'image' ? `<img loading="lazy" src="${p.thumb}" alt="${escapeHtml(p.label)}">` : ic('film')) + `<span>${escapeHtml(p.label)}</span>`;
+    b.className = 'preset' + ((bg.mode === 'preset' && bg.preset === p.src) ? ' on' : '');
+    b.title = label;
+    b.innerHTML = `<img loading="lazy" src="${p.thumb}" alt="${escapeHtml(label)}"><span>${escapeHtml(label)}</span>`;
     b.onclick = () => {
       const g = getBg();
-      g.mode = p.kind === 'video' ? 'video' : 'preset';
+      g.mode = 'preset';
       g.preset = p.src;
       store.set('bg', g); applyBackground(); renderPresets();
-      toast('image', `Fundo <b>${escapeHtml(p.label)}</b> aplicado.`);
+      if ($('#bgSelect')) $('#bgSelect').value = 'preset';
+      toast('image', `Fundo <b>${escapeHtml(label)}</b> aplicado.`);
     };
     box.appendChild(b);
   });
@@ -2236,7 +2271,7 @@ async function tryLocalAutomation(text) {
     const slug = slugify(desc.split(/\s+/).slice(0, 5).join('-'));
     const acts = buildActionFromText(desc);
     const s = { slug, icon: guessIcon(desc), title: desc.slice(0, 48), desc,
-      prompt: `Você executa a seguinte tarefa do usuário: ${desc}. Responda sempre em português, de forma direta e completa.`,
+      prompt: `Você executa a seguinte tarefa do usuário: ${desc}. Responda sempre em ${PL()}, de forma direta e completa.`,
       action: acts.join('\n'), active: true };
     const all = getSkills();
     const ix = all.findIndex(x => x.slug === slug);
@@ -3272,14 +3307,7 @@ try { bindCodeAgent(); } catch {} // após uiConfirm existir (ask abre modal de 
 
 /* ───────── AGENTES ───────── */
 function getAgents() {
-  let a = store.get('agents', null);
-  if (!a) {
-    a = [
-      { id: 'a-seed-1', name: 'Pesquisador', icon: 'search', personality: 'Você é um pesquisador objetivo e rigoroso. Priorize precisão, cite fontes quando houver dados e responda em português.', busy: false },
-      { id: 'a-seed-2', name: 'Redator', icon: 'pen-line', personality: 'Você é um redator criativo premium. Escreva textos claros, elegantes e bem formatados em português.', busy: false }
-    ];
-    store.set('agents', a);
-  }
+  const a = store.get('agents', null) || [];
   return a.map(x => ({ icon: 'bot', busy: false, ...x }));
 }
 function getMain() { return Object.assign({ name: 'Prime', personality: 'Você é o agente principal. Coordena a equipe com autonomia e responde em português.' }, store.get('mainAgent', {})); }
@@ -3358,7 +3386,7 @@ async function runAgent(agent, task) {
   const win = agentWin({ icon: agent.icon || 'bot', title: `${agent.name} · ${String(task).slice(0, 50)}`, body: `<div class="awline">${ic('circle-dot')}<span>Pedido: <b>${escapeHtml(String(task).slice(0, 140))}</b></span></div>` });
   coreBusy(agent.name, String(task).slice(0, 80));
   try {
-    const sys = (agent.personality || 'Seja útil.') + '\nResponda em português. Antes de terminar, confira: cumpri exatamente o pedido? Se pedi tocar/baixar/abrir, confirme o que foi executado, não só intenção.';
+    const sys = (agent.personality || 'Seja útil.') + '\nResponda em ' + PL() + '. Antes de terminar, confira: cumpri exatamente o pedido? Se pedi tocar/baixar/abrir, confirme o que foi executado, não só intenção.';
     const sent = [{ role: 'system', content: sys }, { role: 'user', content: String(task) }];
     awStep(win, `<div class="awline">${ic('chevron-right')}<span>Consultando ${escapeHtml(cfg.model)}…</span></div>`);
     const out = await callLLM(sent);
@@ -3402,7 +3430,7 @@ async function teamFlow(task) {
   let final = results.join('\n\n');
   try {
     final = await callLLM([
-      { role: 'system', content: main.personality + '\nVocê coordenou a equipe. Sintetize os resultados das frentes abaixo numa resposta final única, direta e em português.' },
+      { role: 'system', content: main.personality + '\nVocê coordenou a equipe. Sintetize os resultados das frentes abaixo numa resposta final única, direta e em ' + PL() + '.' },
       { role: 'user', content: 'Tarefa original: ' + task + '\n\nResultados das frentes:\n' + results.join('\n\n') }
     ]);
     trackLLM([{ role: 'system', content: 'síntese da equipe' }, { role: 'user', content: results.join(' ').slice(0, 3000) }], final);
@@ -3525,11 +3553,8 @@ $('#importFile').onchange = e => {
 };
 
 /* ───────── SAUDAÇÃO DO DIA (header) ───────── */
-function greetLeadLocal() {
-  const h = new Date().getHours();
-  return 'Olá, ' + (h < 6 ? 'boa madrugada' : h < 12 ? 'bom dia' : h < 18 ? 'boa tarde' : 'boa noite');
-}
-function greetFallback() { return 'dia tranquilo por aqui. Se precisar de algo, é só falar.'; }
+function greetLeadLocal() { return (window.I18N && window.I18N.greetLead) ? window.I18N.greetLead() : 'Olá'; }
+function greetFallback() { return (window.I18N && window.I18N.greetFallback) ? window.I18N.greetFallback() : 'dia tranquilo por aqui. Se precisar de algo, é só falar.'; }
 function greetApply(sub) {
   greetLead = greetLeadLocal();
   greetSub = sub;
@@ -3537,7 +3562,7 @@ function greetApply(sub) {
 }
 function greetFp(s) { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return String(h); }
 async function bootGreeting() {
-  const day = new Date().toDateString();
+  const day = new Date().toDateString() + '|' + PL();
   const cached = store.get('greet', null);
   const tasks = getTasks().filter(t => !t.done).map(t => t.text);
   const rems = getReminders().filter(r => !(r.repeat === 'once' && r.done)).map(r => `${r.time} ${r.text}${r.repeat === 'daily' ? ' (todo dia)' : ''}`);
@@ -3554,7 +3579,7 @@ async function bootGreeting() {
       `Notas (${notes.length}): ${notes.join(' | ') || 'nenhuma'}.`
     ].join('\n');
     const out = await callLLM([
-      { role: 'system', content: 'Você é o assistente do My OS, um orquestrador local que conhece o dia do usuário. Escreva UMA saudação inicial em pt-BR para o topo do app, no máximo 2 frases e ~220 caracteres, tom gentil, respeitoso, natural e discreto, sem emojis, sem markdown, sem aspas, sem listas, sem travessões. Regras: (1) Não comece com "Olá", a interface já mostra "Olá, bom dia/boa tarde/boa noite". (2) Se houver tarefas pendentes, resuma de forma gentil e curta quantas são e o essencial delas. (3) Inclua os lembretes do dia com horário quando forem relevantes. (4) Olhe as notas e, se alguma aponta algo que o usuário não deve esquecer hoje (um vídeo a gravar, um compromisso, um projeto), mencione isso de forma natural. (5) Nunca copie os dados crus um a um; reescreva com contexto e bom senso. (6) Se não houver nada relevante, diga exatamente: dia tranquilo por aqui. Se precisar de algo, é só falar. (7) Não confirme dados, não dê instruções, não pergunte nada.' },
+      { role: 'system', content: `Você é o assistente do My OS, um orquestrador local que conhece o dia do usuário. Escreva UMA saudação inicial em ${PL()} para o topo do app, no máximo 2 frases e ~220 caracteres, tom gentil, respeitoso, natural e discreto, sem emojis, sem markdown, sem aspas, sem listas, sem travessões. Regras: (1) Não comece com "Olá", a interface já cumprimenta sozinha. (2) Se houver tarefas pendentes, resuma de forma gentil e curta quantas são e o essencial delas. (3) Inclua os lembretes do dia com horário quando forem relevantes. (4) Olhe as notas e, se alguma aponta algo que o usuário não deve esquecer hoje (um vídeo a gravar, um compromisso, um projeto), mencione isso de forma natural. (5) Nunca copie os dados crus um a um; reescreva com contexto e bom senso. (6) Se não houver nada relevante, diga algo no estilo: "dia tranquilo por aqui. Se precisar de algo, é só falar." (7) Não confirme dados, não dê instruções, não pergunte nada.` },
       { role: 'user', content: ctx }
     ], { maxTokens: 140, temperature: 0.6, noTools: true });
     let sub = String(out || '').trim()
@@ -3572,7 +3597,7 @@ async function bootGreeting() {
   }
 }
 
-function renderAll() { renderConvs(); renderReminders(); renderCustomChips(); renderAgents(); renderRoutines(); renderSkills(); renderSideSkills(); renderTasks(); renderNotes(); renderLog(); refreshKeyField(); updateConn(); applyBackground(); icons(); }
+function renderAll() { renderConvs(); renderReminders(); renderCustomChips(); renderAgents(); renderRoutines(); renderSkills(); renderSideSkills(); renderTasks(); renderNotes(); renderLog(); refreshKeyField(); updateConn(); applyBackground(); window.I18N?.applyLang?.(); icons(); }
 renderAll();
 icons();
 askNotify()
