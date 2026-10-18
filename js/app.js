@@ -356,27 +356,34 @@ function openSettings() { maskKeys(); const m = $('#settingsModal'); m.classList
 function closeSettings() { const m = $('#settingsModal'); if (!m || m.hidden) return; maskKeys(); m.classList.remove('show'); m.classList.add('closing'); setTimeout(() => { m.hidden = true; m.classList.remove('closing'); }, 230); }
 $('#btnSettings').onclick = () => openSettings();
 $('#settingsClose').onclick = () => closeSettings();
+/* Fullscreen (discreto, canto inferior direito) */
+const _fsBtn = $('#btnFs');
+if (_fsBtn) {
+  const _fsSync = () => {
+    const on = !!document.fullscreenElement;
+    _fsBtn.innerHTML = ic(on ? 'minimize' : 'maximize');
+    _fsBtn.title = on ? (window.I18N?.t?.('ui.exitFs') || 'Sair da tela cheia') : (window.I18N?.t?.('ui.fullscreen') || 'Tela cheia');
+    icons();
+  };
+  _fsBtn.onclick = () => {
+    if (document.fullscreenElement) document.exitFullscreen?.();
+    else document.documentElement.requestFullscreen?.().catch(() => {});
+  };
+  document.addEventListener('fullscreenchange', _fsSync);
+}
 $('#settingsModal').addEventListener('click', e => { if (e.target === $('#settingsModal')) closeSettings(); });
-/* Navegação da tela de configurações (fullscreen) */
+/* Navegação da tela de configurações: cada seção é uma página inteira */
+function showSetPage(id) {
+  if (!id) return;
+  $$('#settingsModal .set-block').forEach(s => s.classList.toggle('on', s.id === id));
+  $$('#settingsModal .set-nav button[data-sec]').forEach(x => x.classList.toggle('on', x.dataset.sec === id));
+  const c = $('#setContent'); if (c) c.scrollTop = 0;
+}
 $('#settingsModal .set-nav')?.addEventListener('click', e => {
   const b = e.target.closest('button[data-sec]'); if (!b) return;
-  const c = $('#setContent'), el = document.getElementById(b.dataset.sec);
-  if (!c || !el) return;
-  c.scrollTo({ top: Math.max(0, el.offsetTop - 12), behavior: 'smooth' });
+  showSetPage(b.dataset.sec);
 });
-try {
-  const _sc = $('#setContent');
-  if (_sc && 'IntersectionObserver' in window) {
-    const _spy = new IntersectionObserver(entries => {
-      if ($('#settingsModal').hidden) return;
-      entries.forEach(en => {
-        if (!en.isIntersecting) return;
-        $$('#settingsModal .set-nav button').forEach(x => x.classList.toggle('on', x.dataset.sec === en.target.id));
-      });
-    }, { root: _sc, threshold: 0.25 });
-    ['secConn', 'secLook', 'secData', 'secCode'].forEach(id => { const el = document.getElementById(id); if (el) _spy.observe(el); });
-  }
-} catch {}
+showSetPage($('#settingsModal .set-nav button.on')?.dataset.sec || 'secConn');
 document.addEventListener('keydown', e => {
   if (e.key !== 'Escape') return;
   const s = $('#settingsModal'), u = $('#uiModal');
@@ -646,7 +653,17 @@ function renderConvs() {
   if (!box) return;
   box.innerHTML = '';
   const c = getConvs(); const act = store.get('activeConv', null);
-  c.forEach(cv => {
+  const seeAll = $('#btnSeeAllConvs');
+  if (seeAll) {
+    seeAll.hidden = c.length <= 3;
+    const lbl = seeAll.querySelector('[data-i18n]');
+    if (lbl) { lbl.setAttribute('data-i18n', 'side.seeAll'); lbl.textContent = (window.I18N && window.I18N.t) ? window.I18N.t('side.seeAll') : 'ver todas'; }
+    const cnt = seeAll.querySelector('.conv-count');
+    if (cnt) cnt.textContent = c.length;
+    else { const s = document.createElement('span'); s.className = 'conv-count'; s.textContent = c.length; seeAll.appendChild(s); }
+    seeAll.onclick = () => openConvsModal();
+  }
+  c.slice(0, 3).forEach(cv => {
     const last = cv.messages.length ? cv.messages[cv.messages.length - 1].content.slice(0, 60) : 'Conversa vazia';
     const d = document.createElement('div');
     d.className = 'conv' + (cv.id === act ? ' on' : '');
@@ -656,23 +673,72 @@ function renderConvs() {
   });
   $$('#convList [data-edit]').forEach(b => b.onclick = async e => {
     e.stopPropagation();
-    const arr = getConvs(); const ix = arr.findIndex(x => x.id === b.dataset.edit);
-    if (ix < 0) return;
-    const name = await uiPrompt('Renomear conversa', arr[ix].title, 'Nome da conversa');
-    if (name && name.trim()) { arr[ix].title = name.trim().slice(0, 60); saveConvs(arr); }
+    await renameConvFlow(b.dataset.edit);
   });
   $$('#convList [data-del]').forEach(b => b.onclick = async e => {
     e.stopPropagation();
-    if (!(await uiConfirm('Excluir conversa', 'Excluir esta conversa e todo o histórico dela?', 'Excluir'))) return;
-    let arr = getConvs().filter(x => x.id !== b.dataset.del);
-    if (!arr.length) arr = [{ id: 'c' + Date.now(), title: 'Nova conversa', ts: Date.now(), updated: Date.now(), messages: [] }];
-    const wasActive = store.get('activeConv', null) === b.dataset.del;
-    saveConvs(arr);
-    if (wasActive) loadConv(arr[0].id);
+    await deleteConvFlow(b.dataset.del);
   });
   icons();
   paintConvBusy();
 }
+async function renameConvFlow(id) {
+  const arr = getConvs(); const ix = arr.findIndex(x => x.id === id);
+  if (ix < 0) return;
+  const name = await uiPrompt('Renomear conversa', arr[ix].title, 'Nome da conversa');
+  if (name && name.trim()) { arr[ix].title = name.trim().slice(0, 60); saveConvs(arr); }
+}
+async function deleteConvFlow(id) {
+  if (!(await uiConfirm('Excluir conversa', 'Excluir esta conversa e todo o histórico dela?', 'Excluir'))) return;
+  let arr = getConvs().filter(x => x.id !== id);
+  if (!arr.length) arr = [{ id: 'c' + Date.now(), title: 'Nova conversa', ts: Date.now(), updated: Date.now(), messages: [] }];
+  const wasActive = store.get('activeConv', null) === id;
+  saveConvs(arr);
+  if (wasActive) loadConv(arr[0].id);
+}
+function convSummary(cv) {
+  const msgs = (cv.messages || []).slice(-4);
+  if (!msgs.length) return 'Conversa vazia.';
+  return msgs.map(m => (m.role === 'user' ? 'Você: ' : 'IA: ') + String(m.content || '').slice(0, 120)).join(' · ').slice(0, 280);
+}
+function renderConvsGrid() {
+  const grid = $('#convsGrid');
+  if (!grid) return;
+  const all = getConvs(); const act = store.get('activeConv', null);
+  const cnt = $('#convsCount');
+  if (cnt) cnt.textContent = `${all.length} conversa${all.length === 1 ? '' : 's'}`;
+  grid.innerHTML = '';
+  if (!all.length) { grid.innerHTML = '<p class="hint">Nenhuma conversa salva.</p>'; return; }
+  all.forEach(cv => {
+    const d = new Date(cv.updated || cv.ts || Date.now());
+    const card = document.createElement('div');
+    card.className = 'conv-card' + (cv.id === act ? ' on' : '');
+    card.innerHTML = `
+      <div class="cc-top"><b>${escapeHtml(cv.title)}</b>${cv.id === act ? '<span class="cc-dot" title="Conversa ativa"></span>' : ''}</div>
+      <small class="cc-sum">${escapeHtml(convSummary(cv))}</small>
+      <div class="cc-meta">${d.toLocaleDateString('pt-BR')} · ${(cv.messages || []).length} msg</div>
+      <div class="cc-acts btnrow">
+        <button class="iconbtn" data-cedit="${cv.id}" title="Renomear">${ic('pencil')}</button>
+        <button class="iconbtn danger" data-cdel="${cv.id}" title="Excluir">${ic('trash-2')}</button>
+      </div>`;
+    card.onclick = e => { if (e.target.closest('button')) return; loadConv(cv.id); closeConvsModal(); };
+    grid.appendChild(card);
+  });
+  $$('#convsGrid [data-cedit]').forEach(b => b.onclick = async e => { e.stopPropagation(); await renameConvFlow(b.dataset.cedit); renderConvsGrid(); });
+  $$('#convsGrid [data-cdel]').forEach(b => b.onclick = async e => { e.stopPropagation(); await deleteConvFlow(b.dataset.cdel); renderConvsGrid(); });
+  icons();
+}
+function openConvsModal() {
+  renderConvsGrid();
+  $('#convsModal').hidden = false;
+  icons();
+}
+function closeConvsModal() { const m = $('#convsModal'); if (m) m.hidden = true; }
+try {
+  $('#convsModalClose').onclick = closeConvsModal;
+  $('#convsModal').addEventListener('click', e => { if (e.target === e.currentTarget) closeConvsModal(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeConvsModal(); });
+} catch {}
 function findConv(query) {
   const stop = new Set(['lembra', 'lembrar', 'lembro', 'nossa', 'nossas', 'nosso', 'da', 'de', 'do', 'das', 'dos', 'que', 'sobre', 'uma', 'alguma', 'aquela', 'essa', 'foi', 'tivemos', 'falamos', 'voce', 'a', 'o', 'e', 'com', 'pra', 'para', 'me', 'na', 'no', 'em', 'se', 'conversa', 'memoria', 'aquilo', 'disso', 'isso']);
   const words = query.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').split(/[^a-z0-9]+/).filter(w => w.length > 2 && !stop.has(w));
@@ -961,7 +1027,7 @@ $('#composer').addEventListener('submit', async e => {
   /* ── v2.1: executa → verifica conclusão → corrige pendência → entrega ── */
   if (window.__runReAct) {
     try {
-      const TOOL_LABEL = { web_search: 'Buscando fontes', web_open: 'Lendo página', open_site: 'Abrindo site', run_skill: 'Executando skill', music_search: 'Buscando música livre', music_download: 'Baixando MP3', music_play: 'Tocando música', create_task: 'Criando tarefa', list_tasks: 'Lendo tarefas', complete_task: 'Concluindo tarefa', delete_task: 'Deletando tarefa', create_note: 'Criando nota', list_notes: 'Lendo notas', edit_note: 'Editando nota', delete_note: 'Deletando nota', list_convs: 'Listando conversas', read_conv: 'Lendo conversa', news: 'Lendo notícias', code_read: 'Lendo arquivo', code_list: 'Listando pasta', code_glob: 'Buscando arquivos', code_grep: 'Buscando texto', code_write: 'Escrevendo arquivo', code_edit: 'Editando arquivo', code_bash: 'Executando comando', code_undo: 'Desfazendo' };
+      const TOOL_LABEL = { web_search: 'Buscando fontes', web_open: 'Lendo página', open_site: 'Abrindo site', run_skill: 'Executando skill', music_search: 'Buscando música livre', music_download: 'Baixando MP3', music_play: 'Tocando música', create_task: 'Criando tarefa', list_tasks: 'Lendo tarefas', complete_task: 'Concluindo tarefa', delete_task: 'Deletando tarefa', create_note: 'Criando nota', list_notes: 'Lendo notas', edit_note: 'Editando nota', delete_note: 'Deletando nota', list_convs: 'Listando conversas', read_conv: 'Lendo conversa', save_correction: 'Salvando correção', news: 'Lendo notícias', code_read: 'Lendo arquivo', code_list: 'Listando pasta', code_glob: 'Buscando arquivos', code_grep: 'Buscando texto', code_write: 'Escrevendo arquivo', code_edit: 'Editando arquivo', code_bash: 'Executando comando', code_undo: 'Desfazendo' };
       const runAw = agentWin({ icon: 'bot', title: 'Agente · ' + text.slice(0, 60), body: `<div class="awline">${ic('circle-dot')}<span>Iniciando: <b>${escapeHtml(text.slice(0, 100))}</b></span></div>` });
       const execToolReal = async (name, arg) => {
         const label = TOOL_LABEL[name] || name;
@@ -1045,6 +1111,7 @@ $('#composer').addEventListener('submit', async e => {
       ? `\n\n[WORKSPACE ativo: ${wsH.name} — arquivos do projeto via code_read/code_list/code_glob/code_grep/code_write/code_edit/code_bash.]`
       : `\n\n[Sem workspace autorizado: se pedir criar/ler/editar código, use code_* mesmo assim (o sistema orienta a autorizar a pasta) ou explique Configurações → Coding → Autorizar pasta.]`;
     const sys = 'Você é o Free Agent, harness de IA premium. Responda em ' + PL() + ', direto e útil, com formatação leve (negrito, listas, código quando preciso).' + TOOLS_SYS + wsNote
+      + memBlock()
       + (_main.personality ? `\n\n[AGENTE PRINCIPAL ${_main.name}: ${_main.personality}]` : '')
       + skillsCtx()
       + (skill ? `\n\n[SKILL ATIVA: ${skill.title}] ${skill.prompt}` : '');
@@ -1054,7 +1121,7 @@ $('#composer').addEventListener('submit', async e => {
     const tool = parseToolCall(out);
     let via = `${PROVIDERS[cfg.provider].label} · ${escapeHtml(cfg.model)}${skill ? ' · skill ' + escapeHtml(skill.title) : ''}`;
     if (tool) {
-      const TOOL_PT = { web_search: 'Buscando fontes', web_open: 'Lendo página', open_site: 'Abrindo site', run_skill: 'Executando skill', music_search: 'Buscando música', music_download: 'Baixando MP3', music_play: 'Tocando música', create_task: 'Criando tarefa', list_tasks: 'Lendo tarefas', complete_task: 'Concluindo tarefa', delete_task: 'Deletando tarefa', create_note: 'Criando nota', list_notes: 'Lendo notas', edit_note: 'Editando nota', delete_note: 'Deletando nota', list_convs: 'Listando conversas', read_conv: 'Lendo conversa', news: 'Lendo notícias', code_read: 'Lendo arquivo', code_list: 'Listando pasta', code_glob: 'Buscando arquivos', code_grep: 'Buscando texto', code_write: 'Escrevendo arquivo', code_edit: 'Editando arquivo', code_bash: 'Executando comando', code_undo: 'Desfazendo' };
+      const TOOL_PT = { web_search: 'Buscando fontes', web_open: 'Lendo página', open_site: 'Abrindo site', run_skill: 'Executando skill', music_search: 'Buscando música', music_download: 'Baixando MP3', music_play: 'Tocando música', create_task: 'Criando tarefa', list_tasks: 'Lendo tarefas', complete_task: 'Concluindo tarefa', delete_task: 'Deletando tarefa', create_note: 'Criando nota', list_notes: 'Lendo notas', edit_note: 'Editando nota', delete_note: 'Deletando nota', list_convs: 'Listando conversas', read_conv: 'Lendo conversa', save_correction: 'Salvando correção', news: 'Lendo notícias', code_read: 'Lendo arquivo', code_list: 'Listando pasta', code_glob: 'Buscando arquivos', code_grep: 'Buscando texto', code_write: 'Escrevendo arquivo', code_edit: 'Editando arquivo', code_bash: 'Executando comando', code_undo: 'Desfazendo' };
       const tlabel = TOOL_PT[tool.name] || tool.name;
       setCoreState(tlabel, `${tool.name}: ${tool.arg.slice(0, 90)}`);
       const twin = coreWindow({ icon: 'globe', title: tlabel, body: `<b>${escapeHtml(tool.name)}</b> · ${escapeHtml(tool.arg.slice(0, 120))}` });
@@ -1976,6 +2043,131 @@ $('#noteForm').onsubmit = e => {
   toast('sticky-note', 'Nota salva.');
 };
 
+/* ───────── MEMÓRIA DO AGENTE (aprende com correções) ───────── */
+const MEM_ID = 'agent-mem';
+function getMemoryNote() {
+  return getNotes().find(n => n.id === MEM_ID)
+    || getNotes().find(n => /mem[óo]ria do agente|agent memory/i.test(n.title || '')) || null;
+}
+function ensureMemoryNote() {
+  let n = getMemoryNote();
+  if (n) return n;
+  const all = getNotes();
+  n = { id: MEM_ID, title: 'Memória do Agente', text: 'Correções e preferências que o agente aprendeu com você. Edite ou apague o que quiser.', ts: Date.now(), src: 'agent' };
+  all.unshift(n); saveNotes(all);
+  return n;
+}
+function memText() { const n = getMemoryNote(); return n ? String(n.text || '').trim() : ''; }
+function memBlock() {
+  if (!memCfg().on) return '';
+  const t = memText();
+  if (!t) return '';
+  return `\n\n[MEMÓRIA DO AGENTE — correções e preferências do usuário. Leia e considere sempre; nunca contradiga o que está aqui.]\n${t.slice(0, 1500)}`;
+}
+function saveCorrection(text) {
+  const v = String(text || '').trim().slice(0, 400);
+  if (!v) return null;
+  const n = ensureMemoryNote();
+  const line = `- ${new Date().toLocaleDateString('pt-BR')}: ${v}`;
+  n.text = (String(n.text || '').replace(/\s+$/, '') + '\n' + line).slice(0, 8000);
+  n.ts = Date.now();
+  const all = getNotes(); const i = all.findIndex(x => x.id === n.id);
+  if (i >= 0) all[i] = n; else all.unshift(n);
+  saveNotes(all);
+  log('Correção salva na Memória do Agente: ' + v.slice(0, 80), 'ok');
+  return n;
+}
+window.__agentMemoryFn = memBlock;
+function viewAgentMemory() {
+  const n = ensureMemoryNote();
+  try { switchTab('notes'); } catch {}
+  openNoteModal(n);
+}
+
+/* ───────── SUBAGENTES: Secretária (resumo noturno) + Briefing (manhã) ───────── */
+function memCfg() { return Object.assign({ on: true, nightly: true, nightlyAt: '23:00', brief: true, briefAt: '07:00' }, store.get('memCfg', {})); }
+function saveMemCfg(p) { store.set('memCfg', Object.assign(memCfg(), p)); }
+function seedMemStaff() {
+  if (store.get('memStaffSeeded', false)) return;
+  const all = getAgents();
+  const mk = [];
+  if (!all.some(a => a.id === 'secretaria')) mk.push({ id: 'secretaria', icon: 'clipboard-list', name: 'Secretária', personality: 'Você é a Secretária do Free Agent. Resume a memória da aplicação do dia (tarefas, notas, correções, conversas), salva o resumo em arquivo .md e escreve um resumo objetivo no máximo 15 linhas.' });
+  if (!all.some(a => a.id === 'briefing')) mk.push({ id: 'briefing', icon: 'sunrise', name: 'Briefing', personality: 'Você faz o briefing da manhã do Free Agent: prioridades do dia, lembretes com hora e o essencial da Memória do Agente. Máx 10 linhas, direto e acionável.' });
+  if (mk.length) saveAgents([...all, ...mk]);
+  store.set('memStaffSeeded', true);
+}
+function memProviderOk() { const p = cfg.provider; return !!(keys[p] || p === 'ollama' || p === 'lmstudio'); }
+function memDayContext() {
+  const tasks = getTasks().filter(t => !t.done).map(t => t.text);
+  const rems = getReminders().filter(r => !(r.repeat === 'once' && r.done)).map(r => `${r.time} ${r.text}`);
+  const notes = getNotes().filter(n => n.id !== MEM_ID).slice(0, 8).map(n => n.title + ': ' + (n.text || '').slice(0, 140));
+  return [
+    `Data: ${new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}.`,
+    `Memória do Agente: ${memText().slice(0, 800) || 'vazia'}.`,
+    `Tarefas pendentes (${tasks.length}): ${tasks.slice(0, 8).join(' | ') || 'nenhuma'}.`,
+    `Lembretes (${rems.length}): ${rems.slice(0, 6).join(' | ') || 'nenhum'}.`,
+    `Notas (${notes.length}): ${notes.join(' | ') || 'nenhuma'}.`
+  ].join('\n');
+}
+async function memNightlyRun() {
+  const sec = getAgents().find(a => a.id === 'secretaria');
+  if (!sec) return;
+  if (!memProviderOk()) { log('Resumo noturno pulado: provedor desconectado.', 'warn'); return; }
+  setAgentBusy(sec.id, true);
+  coreBusy('Secretária · Resumo da noite', 'memória do dia');
+  try {
+    const out = await callLLM([
+      { role: 'system', content: sec.personality + ' Responda em ' + PL() + '. Sem emojis, sem markdown de título.' },
+      { role: 'user', content: 'Resumo noturno da memória desta aplicação:\n\n' + memDayContext() }
+    ], { maxTokens: 700, temperature: 0.5, noTools: true });
+    const md = `# Resumo do dia — ${new Date().toLocaleDateString('pt-BR')}\n\n${String(out || '').trim()}\n`;
+    const n = ensureMemoryNote();
+    n.text = (n.text + `\n\n## Resumo da noite (${new Date().toLocaleDateString('pt-BR')})\n${md.slice(0, 3000)}`).slice(-8000);
+    n.ts = Date.now();
+    const all = getNotes(); const i = all.findIndex(x => x.id === n.id);
+    if (i >= 0) all[i] = n; else all.unshift(n);
+    saveNotes(all);
+    const fname = `free-agent-resumo-${new Date().toISOString().slice(0, 10)}.md`;
+    let saved = false;
+    try {
+      const dir = await getWorkDir(false);
+      if (dir) { const fh = await dir.getFileHandle(fname, { create: true }); const w = await fh.createWritable(); await w.write(md); await w.close(); saved = true; }
+    } catch {}
+    if (!saved) downloadBlob(fname, md, 'text/markdown');
+    log('Secretária: resumo noturno salvo (' + (saved ? 'pasta autorizada' : 'download') + ').', 'ok');
+    toast('clipboard-list', 'Resumo noturno da memória salvo.');
+  } catch (e) { log('Resumo noturno falhou: ' + String(e.message).slice(0, 120), 'warn'); }
+  finally { setAgentBusy(sec.id, false); coreIdle(); }
+}
+async function memBriefingRun() {
+  const br = getAgents().find(a => a.id === 'briefing');
+  if (!br) return;
+  if (!memProviderOk()) { log('Briefing pulado: provedor desconectado.', 'warn'); return; }
+  setAgentBusy(br.id, true);
+  coreBusy('Briefing · Manhã', 'prioridades do dia');
+  try {
+    const out = await callLLM([
+      { role: 'system', content: br.personality + ' Responda em ' + PL() + '. Sem emojis.' },
+      { role: 'user', content: 'Briefing da manhã:\n\n' + memDayContext() }
+    ], { maxTokens: 500, temperature: 0.5, noTools: true });
+    addMsg('ai', String(out || '').trim(), `<span class="src">briefing da manhã · Secretária &amp; Briefing · ${PROVIDERS[cfg.provider].label}</span>`);
+    history.push({ role: 'assistant', content: '[Briefing] ' + String(out || '').trim() }); persist();
+    try { new Notification('Free Agent · Briefing da manhã', { body: String(out || '').trim().slice(0, 200) }); } catch {}
+    log('Briefing da manhã entregue.', 'ok');
+  } catch (e) { log('Briefing falhou: ' + String(e.message).slice(0, 120), 'warn'); }
+  finally { setAgentBusy(br.id, false); coreIdle(); }
+}
+setInterval(() => {
+  const m = memCfg();
+  if (!m.on) return;
+  const now = new Date();
+  const hm = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+  const day = now.toDateString();
+  const last = store.get('memLastRun', {});
+  if (m.nightly && hm === m.nightlyAt && last.night !== day) { store.set('memLastRun', { ...last, night: day }); memNightlyRun(); }
+  if (m.brief && hm === m.briefAt && last.brief !== day) { store.set('memLastRun', { ...last, brief: day }); memBriefingRun(); }
+}, 15000);
+
 /* ───────── MODELOS DA API (via chave) ───────── */
 async function listModels(p, key) {
   if (p === 'groq' || p === 'openai') {
@@ -2839,7 +3031,21 @@ $('#btnWorkDir').onclick = async () => {
     const h = await window.showDirectoryPicker({ mode: 'readwrite' });
     workDirHandle = h;
     await idbSet('workdir', h);
-    paintWorkDir();
+paintWorkDir();
+
+/* ───────── BINDINGS: Memória do Agente (Configurações) ───────── */
+try {
+  const _m = memCfg();
+  const _setMem = () => { const g = id => document.getElementById(id); if (g('memOn')) { g('memOn').checked = !!_m.on; g('memNightly').checked = !!_m.nightly; g('memNightlyAt').value = _m.nightlyAt || '23:00'; g('memBrief').checked = !!_m.brief; g('memBriefAt').value = _m.briefAt || '07:00'; } };
+  _setMem();
+  $('#btnViewMemory').onclick = () => { closeSettings(); viewAgentMemory(); };
+  ['memOn', 'memNightly', 'memBrief'].forEach(id => $('#' + id).onchange = () => {
+    saveMemCfg({ on: $('#memOn').checked, nightly: $('#memNightly').checked, brief: $('#memBrief').checked });
+    log('Memória do Agente: configuração atualizada.', 'info');
+  });
+  $('#memNightlyAt').onchange = () => { saveMemCfg({ nightlyAt: $('#memNightlyAt').value || '23:00' }); store.set('memLastRun', {}); };
+  $('#memBriefAt').onchange = () => { saveMemCfg({ briefAt: $('#memBriefAt').value || '07:00' }); store.set('memLastRun', {}); };
+} catch (e) { log('Bindings da memória falharam: ' + e.message, 'warn'); }
     toast('folder', `Pasta <b>${escapeHtml(h.name)}</b> autorizada.`);
     log('Pasta de trabalho: ' + h.name, 'ok');
   } catch {}
@@ -3004,13 +3210,14 @@ try {
 paintWorkDir();
 
 /* ───────── NAVEGADOR NEXUS (ferramentas web p/ qualquer modelo) ───────── */
-const TOOLS_SYS = `\n\n[FERRAMENTAS — web + música local. REGRA DE OURO: se dá p/ responder direto, RESPONDA DIRETO sem tool. Só use tool quando pedir dado externo/ação (notícia atual, abrir site, criar/ler tarefa, tocar/baixar). NUNCA use JSON {"name":...} — só o formato <tool>. Quando precisar, responda SOMENTE com 1 chamada neste formato exato:\n<tool name="web_search">sua consulta</tool>\n<tool name="web_open">https://url-completa</tool>\n<tool name="open_site">youtube | gmail | github | nome do site ou URL</tool> — use SEMPRE que pedir ABRIR/VER/ACESSAR.\n<tool name="music_search">termo</tool> — busca PRIMEIRO na biblioteca local do usuário (upada no player à esquerda), depois Archive/Wiki. Use p/ "toca X".\n<tool name="music_download">termo</tool> — baixa o MP3 do 1º resultado.\n<tool name="create_task">texto da tarefa</tool> — use SEMPRE que pedir CRIAR/ADICIONAR tarefa; o sistema salva na aba Tarefas.\n<tool name="list_tasks"></tool> — use SEMPRE que perguntar SE TEM tarefa/pendência/o que falta; o sistema devolve a lista real. Responda SÓ com os dados retornados.\n<tool name="complete_task">texto (ou parte) da tarefa</tool> — use SEMPRE que pedir CONCLUIR/MARCAR COMO FEITA/TERMINAR tarefa; o sistema marca como concluída na aba Tarefas.\n<tool name="delete_task">texto (ou parte) da tarefa</tool> — use SEMPRE que pedir DELETAR/APAGAR/REMOVER tarefa; o sistema remove da aba Tarefas.\n<tool name="create_note">{"title":"Título","text":"conteúdo"}</tool> — use SEMPRE que pedir CRIAR/ANOTAR/ANOTE nota; o sistema salva na aba Notas.\n<tool name="list_notes"></tool> — use SEMPRE que perguntar SE TEM nota/minhas notas/O QUE ANOTEI/conteúdo de nota; devolve a lista real COM texto. Responda SÓ com os dados retornados.\n<tool name="edit_note">{"match":"trecho da nota","text":"novo conteúdo"}</tool> — use quando pedir EDITAR/ATUALIZAR/MUDAR nota.\n<tool name="delete_note">trecho da nota ou nº</tool> — use quando pedir DELETAR/APAGAR/REMOVER nota.
+const TOOLS_SYS = `\n\n[FERRAMENTAS — web + música local. REGRA DE OURO: se dá p/ responder direto, RESPONDA DIRETO sem tool. Só use tool quando pedir dado externo/ação (notícia atual, abrir site, criar/ler tarefa, tocar/baixar). web_search SÓ quando pedir busca expressamente (pesquise/busque/notícias/preço/clima) — NUNCA pesquise do nada para enfeitar a resposta. NUNCA use JSON {"name":...} — só o formato <tool>. Quando precisar, responda SOMENTE com 1 chamada neste formato exato:\n<tool name="web_search">sua consulta</tool>\n<tool name="web_open">https://url-completa</tool>\n<tool name="open_site">youtube | gmail | github | nome do site ou URL</tool> — use SEMPRE que pedir ABRIR/VER/ACESSAR.\n<tool name="music_search">termo</tool> — busca PRIMEIRO na biblioteca local do usuário (upada no player à esquerda), depois Archive/Wiki. Use p/ "toca X".\n<tool name="music_download">termo</tool> — baixa o MP3 do 1º resultado.\n<tool name="create_task">texto da tarefa</tool> — use SEMPRE que pedir CRIAR/ADICIONAR tarefa; o sistema salva na aba Tarefas.\n<tool name="list_tasks"></tool> — use SEMPRE que perguntar SE TEM tarefa/pendência/o que falta; o sistema devolve a lista real. Responda SÓ com os dados retornados.\n<tool name="complete_task">texto (ou parte) da tarefa</tool> — use SEMPRE que pedir CONCLUIR/MARCAR COMO FEITA/TERMINAR tarefa; o sistema marca como concluída na aba Tarefas.\n<tool name="delete_task">texto (ou parte) da tarefa</tool> — use SEMPRE que pedir DELETAR/APAGAR/REMOVER tarefa; o sistema remove da aba Tarefas.\n<tool name="create_note">{"title":"Título","text":"conteúdo"}</tool> — use SEMPRE que pedir CRIAR/ANOTAR/ANOTE nota; o sistema salva na aba Notas.\n<tool name="list_notes"></tool> — use SEMPRE que perguntar SE TEM nota/minhas notas/O QUE ANOTEI/conteúdo de nota; devolve a lista real COM texto. Responda SÓ com os dados retornados.\n<tool name="edit_note">{"match":"trecho da nota","text":"novo conteúdo"}</tool> — use quando pedir EDITAR/ATUALIZAR/MUDAR nota.\n<tool name="delete_note">trecho da nota ou nº</tool> — use quando pedir DELETAR/APAGAR/REMOVER nota.
 <tool name="list_convs"></tool> — use quando pedir ler/ver conversas anteriores; devolve ids e títulos.
-<tool name="read_conv">{"match":"trecho do título ou id"}</tool> — use quando pedir achar informação em conversa antiga / ler conversa específica; devolve as mensagens.\n<tool name="run_skill">slug-da-skill</tool>.\nMúsica: se o usuário citar nome da biblioteca local, use music_search com esse nome — o sistema já prioriza locais. Controles (pausa/próxima) são locais, apenas confirme.\nNUNCA explique passos para abrir/pesquisar/tocar: invoque a ferramenta e deixe o sistema executar.\nO sistema executa e devolve o resultado; aí responda em português citando fontes/links.]\n\n[CODING AGENT — arquivos do projeto, só quando pedir criar/editar/ler código. Workspace = pasta autorizada em Configurações → Coding.\n<tool name="code_read">{"path":"src/app.js","offset":0,"limit":120}</tool> — lê arquivo (offset/limit p/ grandes). Leia antes de editar.\n<tool name="code_list">{"path":"src"}</tool> — lista pasta ({} = raiz).\n<tool name="code_glob">{"pattern":"src/**/*.js"}</tool> — acha arquivos (*, **, ?).\n<tool name="code_grep">{"pattern":"TODO|FIXME","include":"*.js"}</tool> — busca texto (regex) no projeto.\n<tool name="code_write">{"path":"src/novo.js","content":"...código completo..."}</tool> — cria/sobrescreve o arquivo INTEIRO (cria pastas). P/ novo ou reescrita grande. Pula se idêntico.\n<tool name="code_edit">{"path":"src/app.js","old_string":"trecho exato","new_string":"novo"}</tool> — troca precisa; old_string deve existir exatamente. P/ mudança pequena. "replace_all":true p/ todas.\n<tool name="code_bash">{"cmd":"npm test","timeout_ms":60000}</tool> — shell no projeto (exige bridge.py + permissão).\nRegras: JSON válido na tag; nunca escreva o literal </tool> dentro de content; escrita pode pedir confirmação com diff (ask) ou ser negada (modo Plan/deny); Desfazer reverte a última mudança.
+<tool name="read_conv">{"match":"trecho do título ou id"}</tool> — use quando pedir achar informação em conversa antiga / ler conversa específica; devolve as mensagens.
+<tool name="save_correction">resumo da correção em 1 linha</tool> — use SEMPRE que o usuário corrigir algo de forma clara ("não é…", "na verdade…", "esquece isso", "lembra que…", "eu prefiro…"): primeiro CONFIRME a correção em 1 frase e depois chame a tool com o resumo. A correção vai para a Memória do Agente.\n<tool name="run_skill">slug-da-skill</tool>.\nMúsica: se o usuário citar nome da biblioteca local, use music_search com esse nome — o sistema já prioriza locais. Controles (pausa/próxima) são locais, apenas confirme.\nNUNCA explique passos para abrir/pesquisar/tocar: invoque a ferramenta e deixe o sistema executar.\nO sistema executa e devolve o resultado; aí responda em português citando fontes/links.]\n\n[CODING AGENT — arquivos do projeto, só quando pedir criar/editar/ler código. Workspace = pasta autorizada em Configurações → Coding.\n<tool name="code_read">{"path":"src/app.js","offset":0,"limit":120}</tool> — lê arquivo (offset/limit p/ grandes). Leia antes de editar.\n<tool name="code_list">{"path":"src"}</tool> — lista pasta ({} = raiz).\n<tool name="code_glob">{"pattern":"src/**/*.js"}</tool> — acha arquivos (*, **, ?).\n<tool name="code_grep">{"pattern":"TODO|FIXME","include":"*.js"}</tool> — busca texto (regex) no projeto.\n<tool name="code_write">{"path":"src/novo.js","content":"...código completo..."}</tool> — cria/sobrescreve o arquivo INTEIRO (cria pastas). P/ novo ou reescrita grande. Pula se idêntico.\n<tool name="code_edit">{"path":"src/app.js","old_string":"trecho exato","new_string":"novo"}</tool> — troca precisa; old_string deve existir exatamente. P/ mudança pequena. "replace_all":true p/ todas.\n<tool name="code_bash">{"cmd":"npm test","timeout_ms":60000}</tool> — shell no projeto (exige bridge.py + permissão).\nRegras: JSON válido na tag; nunca escreva o literal </tool> dentro de content; escrita pode pedir confirmação com diff (ask) ou ser negada (modo Plan/deny); Desfazer reverte a última mudança.
 Ao CRIAR código (landing page, site, script), SEMPRE invoque code_write — NUNCA cole o arquivo inteiro no chat.]`;
 function parseToolCall(text) {
   const s = String(text || '');
-  const m = s.match(/<tool\s+name=["'](web_search|web_open|news|open_site|run_skill|music_search|music_download|music_play|create_task|list_tasks|complete_task|delete_task|create_note|list_notes|edit_note|delete_note|list_convs|read_conv|code_read|code_list|code_glob|code_grep|code_write|code_edit|code_bash)["']\s*>([\s\S]*?)<\/tool>/i);
+  const m = s.match(/<tool\s+name=["'](web_search|web_open|news|open_site|run_skill|music_search|music_download|music_play|create_task|list_tasks|complete_task|delete_task|create_note|list_notes|edit_note|delete_note|list_convs|read_conv|save_correction|code_read|code_list|code_glob|code_grep|code_write|code_edit|code_bash)["']\s*>([\s\S]*?)<\/tool>/i);
   if (m) { const nm = m[1].toLowerCase(); return { name: nm, arg: m[2].trim().slice(0, nm.startsWith('code_') ? 20000 : 500) }; }
   try {
     const jm = s.match(/\{\s*"name"\s*:\s*"([\w-]+)"\s*,\s*"arguments"\s*:\s*(\{[\s\S]*?\})\s*\}/);
@@ -3333,6 +3540,16 @@ async function execTool(name, arg, step) {
     history.push({ role: 'assistant', content: 'Nota criada: ' + n.title }); persist();
     return `NOTA CRIADA: ${n.title} — ${n.text.slice(0, 300)}`;
   }
+  if (name === 'save_correction') {
+    say('Registrando na memória…');
+    if (!memCfg().on) return 'Memória desativada nas Configurações → Memória do Agente.';
+    const v = String(arg || '').trim().slice(0, 400);
+    if (!v) throw new Error('correção vazia');
+    saveCorrection(v);
+    addHtml('ai', `<b>Correção memorizada:</b> ${escapeHtml(v)}<br><span class="src">Memória do Agente · "ver o que o agente sabe sobre mim" nas Configurações</span>`);
+    history.push({ role: 'assistant', content: 'Correção salva na memória: ' + v }); persist();
+    return `CORREÇÃO SALVA NA MEMÓRIA DO AGENTE: ${v}`;
+  }
   if (name === 'list_notes') {
     say('Lendo suas notas…');
     const all = getNotes();
@@ -3643,6 +3860,7 @@ function log(msg, kind = 'info', detail = '') {
   arr.unshift({ ts: new Date().toLocaleString('pt-BR'), iso: new Date().toISOString(), msg: String(msg || ''), kind, detail: String(detail || '').slice(0, 4000) });
   store.set('log', arr.slice(0, 300));
   renderLog();
+  try { window.Term?.push(msg, kind); } catch {}
 }
 async function copyText(t) {
   try { await navigator.clipboard.writeText(t); return true; }
@@ -3718,7 +3936,7 @@ function toast(icon, html) {
 }
 $('#btnExport').onclick = () => {
   const safeKeys = {}; Object.keys(keys || {}).forEach(k => safeKeys[k] = '');
-  const data = { cfg: { provider: cfg.provider, model: cfg.model, temperature: cfg.temperature, maxTokens: cfg.maxTokens }, keys: safeKeys, routines: getRoutines(), skills: getSkills(), tasks: getTasks(), reminders: getReminders(), convs: getConvs(), mascot: { name: getMascotName(), showName: mascotNameOn(), birth: getBirth(), models: store.get('agentModels', []) || [], tokens: +store.get('agentTokens', 0) || 0 }, exportedAt: new Date().toISOString(), harness: 'v2' };
+  const data = { cfg: { provider: cfg.provider, model: cfg.model, temperature: cfg.temperature, maxTokens: cfg.maxTokens }, keys: safeKeys, routines: getRoutines(), skills: getSkills(), tasks: getTasks(), reminders: getReminders(), convs: getConvs(), notes: getNotes(), memCfg: memCfg(), mascot: { name: getMascotName(), showName: mascotNameOn(), birth: getBirth(), models: store.get('agentModels', []) || [], tokens: +store.get('agentTokens', 0) || 0 }, exportedAt: new Date().toISOString(), harness: 'v2' };
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
   a.download = 'free-agent-backup.json'; a.click();
@@ -3735,6 +3953,8 @@ $('#importFile').onchange = e => {
     if (j.tasks) store.set('tasks', j.tasks);
     if (j.keys) Object.assign(keys, j.keys), store.set('keys', keys);
     if (j.reminders) store.set('reminders', j.reminders);
+    if (Array.isArray(j.notes)) store.set('notes', j.notes);
+    if (j.memCfg) store.set('memCfg', j.memCfg);
     if (j.convs && j.convs.length) { store.set('convs', j.convs); loadConv(j.convs[0].id); }
     if (j.mascot) {
       if (typeof j.mascot.name === 'string') store.set('mascotName', j.mascot.name.trim());
@@ -3764,12 +3984,14 @@ async function bootGreeting() {
   const tasks = getTasks().filter(t => !t.done).map(t => t.text);
   const rems = getReminders().filter(r => !(r.repeat === 'once' && r.done)).map(r => `${r.time} ${r.text}${r.repeat === 'daily' ? ' (todo dia)' : ''}`);
   const notes = getNotes().slice(0, 6).map(n => n.title + ': ' + (n.text || '').slice(0, 100));
-  const fp = greetFp(tasks.join('|') + '#' + rems.join('|') + '#' + notes.join('#'));
+  const mem = memText();
+  const fp = greetFp(tasks.join('|') + '#' + rems.join('|') + '#' + notes.join('#') + '#' + mem.slice(0, 300));
   const hit = cached && cached.day === day && cached.fp === fp && cached.sub;
   greetApply(hit ? cached.sub : greetFallback());
   if (hit) return;
   try {
     const ctx = [
+      `MEMÓRIA DO AGENTE (leia PRIMEIRO — correções/preferências do usuário; não contradiga): ${mem.slice(0, 600) || 'vazia'}.`,
       `Agora: ${new Date().toLocaleString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}.`,
       `Tarefas pendentes (${tasks.length}): ${tasks.slice(0, 8).join(' | ') || 'nenhuma'}.`,
       `Lembretes (${rems.length}): ${rems.slice(0, 6).join(' | ') || 'nenhum'}.`,
@@ -3797,5 +4019,6 @@ async function bootGreeting() {
 function renderAll() { renderConvs(); renderReminders(); renderCustomChips(); renderAgents(); renderRoutines(); renderSkills(); renderSideSkills(); renderTasks(); renderNotes(); renderLog(); refreshKeyField(); updateConn(); applyBackground(); applyBrand(); window.I18N?.applyLang?.(); icons(); }
 renderAll();
 icons();
+try { seedMemStaff(); renderAgents(); } catch {}
 askNotify()
 bootGreeting();

@@ -18,20 +18,23 @@ git clone https://github.com/YOUR-USERNAME/my-os.git
 
 # 2. Serve
 cd my-os
-python3 -m http.server 8080
+python3 serve.py
 
 # 3. Open
 # http://localhost:8080
 ```
 
 > Don't open via `file://` (double-clicking the HTML). Three.js CDN modules require `http://`.
+> `serve.py` is the **integrated** server: it serves the app plus `/health` + `/tg-*`,
+> so **Telegram → Connect** works out of the box, no separate process.
 
 ## Server alternatives
 
 ```bash
-npx serve . -l 8080
-php -S localhost:8080
-python -m http.server 8080   # recommended
+python3 serve.py            # RECOMMENDED (app + Telegram/Coding on one port)
+python3 -m http.server 8080 # static only — Telegram/Coding need the bridge aside
+npx serve . -l 8080         # Node (static only)
+php -S localhost:8080       # PHP (static only)
 ```
 
 ## First setup

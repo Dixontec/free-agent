@@ -86,7 +86,8 @@ export async function runReAct(userText, deps) {
   const wsNote = deps.workspace
     ? `\n[WORKSPACE ativo: ${deps.workspace} — arquivos do projeto via code_read/code_list/code_glob/code_grep/code_write/code_edit/code_bash.]`
     : `\n[Sem workspace autorizado: se pedir criar/ler/editar código, use code_* mesmo assim (o sistema orienta a autorizar a pasta) ou explique Configurações → Coding → Autorizar pasta.]`;
-  const systemBase = `Você é o Free Agent. Responda em ${PL()}, direto.\n${toolsSection}${wsNote}\nRegra: se dá p/ responder direto, RESPONDA DIRETO sem tool. Só chame tool se pedir dado externo/ação. 1 tool por turno ou resposta final. Máx ${LIMITS.maxSteps} passos. NUNCA use JSON {"name":...} — só <tool name="...">. Antes de responder, confira: cumpri o pedido? citei links reais só se pesquisei?`;
+  const memBlock = (typeof window !== 'undefined' && window.__agentMemoryFn) ? window.__agentMemoryFn() : '';
+  const systemBase = `Você é o Free Agent. Responda em ${PL()}, direto.\n${toolsSection}${wsNote}${memBlock}\nRegra: se dá p/ responder direto, RESPONDA DIRETO sem tool. Só chame tool se pedir dado externo/ação. web_search SÓ quando o usuário pedir busca expressamente (pesquise/busque/notícias/preço/clima) — NUNCA pesquise do nada para complementar ou enfeitar a resposta; responda do seu conhecimento. 1 tool por turno ou resposta final. Máx ${LIMITS.maxSteps} passos. NUNCA use JSON {"name":...} — só <tool name="...">. Se o usuário corrigir algo claramente ("não é…", "na verdade…", "esquece isso", "lembra que…"), confirme a correção e chame save_correction. Antes de responder, confira: cumpri o pedido? citei links reais só se pesquisei?`;
   const toolOutputs = [];
   const toolsUsed = [];
   const searchQs = [];
@@ -95,11 +96,20 @@ export async function runReAct(userText, deps) {
   let corrections = 0;
 
   // executor único de tools (caminho normal + correções que agem)
-  // Gate anti-tool-desnecessária: web/open só executa se pedido exigir; senão ignora e responde direto.
+  // Gate anti-tool-desnecessária, em 2 níveis:
+  //  · web_search → EXIGE pedido expresso de busca/notícia/preço/clima/etc. Nunca do nada.
+  //  · web_open   → gatilho amplo (página que o usuário indicou/colou).
+  const SEARCH_RE = /pesquis|busc|not[ií]cias?|procure|procurar|google|bing|duckduckgo|wiki|pre[çc]os?|clima|cota[çc]|ultim[oa]s?|atualiza|manchete|apuro|curiosidad|defini[çc]|significad|hist[óo]ria d[ao]|compar|versus|\bvs\b/i;
+  const needsSearchFor = () => SEARCH_RE.test(String(userText || ''));
   const NEEDS_RE = /not[ií]cia|\bnota|pesquis|busc|atual|hoje|recente|2024|2025|2026|abrir|acess|ver\s+site|youtube|v[ií]deo|tarefa|pendente|toca|toque|play|m[uú]sica|baixar|download|skill|rotina|pre[çc]o|clima|dado|fonte|link/i;
   const needsToolFor = (t) => NEEDS_RE.test(String(userText || '')) || toolOutputs.length > 0;
   async function runToolCall(tool, step) {
-    if ((tool.name === 'web_search' || tool.name === 'web_open') && !needsToolFor()) {
+    if (tool.name === 'web_search' && !needsSearchFor()) {
+      trace({ kind: 'tool-skip-unneeded', step, tool: tool.name });
+      toolOutputs.push(`[Tool web_search ignorada — busca só quando pedir expressamente. Responda direto em ${PL()}.]`);
+      return;
+    }
+    if (tool.name === 'web_open' && !needsToolFor()) {
       trace({ kind: 'tool-skip-unneeded', step, tool: tool.name });
       toolOutputs.push(`[Tool ${tool.name} ignorada — pedido não exige dado externo. Responda direto em ${PL()}.]`);
       return;

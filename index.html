@@ -3,9 +3,9 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Free Agent — Local-First AI Harness</title>
+<title>Free Agent</title>
 <meta name="description" content="Free Agent — local-first AI harness: use any model (Groq, OpenAI, Gemini, Anthropic, Ollama, OpenRouter) with total privacy, routines, skills, tasks and more." />
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%230071e3'/%3E%3Cstop offset='.6' stop-color='%237d2aff'/%3E%3Cstop offset='1' stop-color='%23ff2fb3'/%3E%3C/linearGradient%3E%3C/defs%3E%3Ccircle cx='16' cy='16' r='13' fill='none' stroke='url(%23g)' stroke-width='2.5'/%3E%3Ccircle cx='16' cy='16' r='5' fill='url(%23g)'/%3E%3C/svg%3E" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='13' fill='none' stroke='%23ffffff' stroke-width='2.5'/%3E%3Ccircle cx='16' cy='16' r='5' fill='%23ffffff'/%3E%3C/svg%3E" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&family=Space+Grotesk:wght@500;600;700&family=Unbounded:wght@600;800&display=swap" rel="stylesheet">
@@ -40,6 +40,7 @@
       <section class="side-block">
         <h2><i data-lucide="history"></i> <span data-i18n="side.convs">Conversas</span> <button id="btnNewConv" class="linkbtn" title="Nova conversa"><i data-lucide="plus"></i><span data-i18n="side.new">nova</span></button></h2>
         <div id="convList" class="convlist"></div>
+        <button id="btnSeeAllConvs" class="linkbtn conv-seeall" hidden><i data-lucide="layout-grid"></i><span data-i18n="side.seeAll">ver todas</span></button>
       </section>
 
       <section class="side-block" id="agentsSide">
@@ -176,7 +177,7 @@
         <button data-tab="reminders"><i data-lucide="bell"></i><span data-i18n="tab.reminders">Lembretes</span></button>
         <button data-tab="log"><i data-lucide="terminal"></i><span data-i18n="tab.log">Log</span></button>
         <button data-tab="notes"><i data-lucide="sticky-note"></i><span data-i18n="tab.notes">Notas</span></button>
-        <button data-tab="extra1"><i data-lucide="rocket"></i></button>
+        <button data-tab="extra1" title="Telegram"><i data-lucide="send"></i></button>
         <button data-tab="extra2"><i data-lucide="zap"></i></button>
       </nav>
 
@@ -309,7 +310,63 @@
         </form>
         <div id="noteList"></div>
       </div>
-      <div class="tabpage" id="tab-extra1" hidden></div>
+      <div class="tabpage" id="tab-extra1" hidden>
+        <div class="tabhead"><h3><i data-lucide="send" class="tg-ic"></i> <span data-i18n="tg.title">Telegram</span></h3><span id="tgStatus" class="tg-pill off" data-i18n="tg.off">desconectado</span></div>
+
+        <div class="tg-hero">
+          <p data-i18n="tg.hero">Fale com o Free Agent pelo Telegram — de qualquer lugar, pelo celular. Ele responde e executa as mesmas tarefas do app (buscar, tocar música, criar tarefas, lembrar…).</p>
+        </div>
+
+        <div class="tg-step">
+          <span class="tg-num">1</span>
+          <div class="tg-step-body">
+            <b data-i18n="tg.s1T">Crie seu bot no Telegram</b>
+            <p data-i18n="tg.s1B">Abra o <b>@BotFather</b> no Telegram, envie <code>/newbot</code>, escolha um nome e um @usuário. Ele entrega um <b>token</b> — copie.</p>
+            <div class="btnrow">
+              <a class="btn ghost sm" href="https://t.me/BotFather" target="_blank" rel="noopener"><i data-lucide="external-link"></i><span data-i18n="tg.open">Abrir @BotFather</span></a>
+            </div>
+          </div>
+        </div>
+
+        <div class="tg-step">
+          <span class="tg-num">2</span>
+          <div class="tg-step-body">
+            <b data-i18n="tg.s2T">Cole o token aqui</b>
+            <p data-i18n="tg.s2B">O token fica <b>só no seu navegador</b> — nunca sai do seu PC. A conexão é direta do seu navegador ao Telegram, sem intermediário.</p>
+            <div class="tg-tokenrow">
+              <input id="tgToken" type="password" placeholder="123456789:AAH…" autocomplete="off" spellcheck="false" />
+              <button id="tgToggleToken" class="btn ghost sm icon-only" title="mostrar/ocultar"><i data-lucide="eye"></i></button>
+            </div>
+            <label class="fld" style="margin-top:8px;margin-bottom:0"><span data-i18n="tg.chatIdLabel">Chat ID (opcional — só esse chat fala com o bot)</span>
+              <input id="tgChatId" type="text" placeholder="ex.: 5511999999999" autocomplete="off" spellcheck="false" />
+            </label>
+          </div>
+        </div>
+
+        <div class="tg-step">
+          <span class="tg-num">3</span>
+          <div class="tg-step-body">
+            <b data-i18n="tg.s3T">Conecte</b>
+            <p data-i18n="tg.s3B">Conectar é direto, pelo próprio navegador — sem rodar nada, sem terminal. Assim que o app abre e já há token salvo, o long-polling começa sozinho.</p>
+            <div class="btnrow">
+              <button id="tgConnect" class="btn primary sm"><i data-lucide="link"></i><span data-i18n="tg.connect">Conectar bot</span></button>
+              <button id="tgDisconnect" class="btn ghost sm" hidden><i data-lucide="unlink"></i><span data-i18n="tg.disconnect">Desconectar</span></button>
+            </div>
+            <p id="tgHint" class="tg-hint" hidden></p>
+          </div>
+        </div>
+
+        <div class="tg-step">
+          <span class="tg-num">4</span>
+          <div class="tg-step-body">
+            <b data-i18n="tg.s4T">Atividade do bot</b>
+            <p data-i18n="tg.s4B">Últimas mensagens recebidas e respondidas pelo Telegram.</p>
+            <div id="tgLog" class="tg-log"></div>
+          </div>
+        </div>
+
+        <p class="hint" style="margin-top:14px"><i data-lucide="shield-check"></i> <span data-i18n="tg.privacy">Privacidade: o token vive no localStorage do seu navegador. A conexão é direta do seu navegador para o api.telegram.org — sem intermediário nosso.</span></p>
+      </div>
       <div class="tabpage" id="tab-extra2" hidden></div>
     </aside>
   </main>
@@ -372,6 +429,7 @@
 </div>
 
 <div id="toasts"></div>
+<button id="btnFs" class="fsbtn" title="Tela cheia" data-i18n-title="ui.fullscreen" aria-label="Tela cheia"><i data-lucide="maximize"></i></button>
 
 <div id="voiceBlur" hidden></div>
 <div id="voiceFloat" hidden>
@@ -393,7 +451,9 @@
         <button data-sec="secConn" class="on"><i data-lucide="cpu"></i><span data-i18n="set.navConn">Conexão &amp; Modelo</span></button>
         <button data-sec="secLook"><i data-lucide="palette"></i><span data-i18n="set.navLook">Aparência &amp; Fundo</span></button>
         <button data-sec="secData"><i data-lucide="database"></i><span data-i18n="set.navData">Meus dados</span></button>
+        <button data-sec="secMem"><i data-lucide="brain"></i><span data-i18n="set.navMem">Memória do Agente</span></button>
         <button data-sec="secCode"><i data-lucide="code"></i><span data-i18n="set.navCode">Coding Agent</span></button>
+        <button data-sec="secHelp"><i data-lucide="circle-help"></i><span data-i18n="set.navHelp">Ajuda</span></button>
       </nav>
       <div class="set-content" id="setContent">
     <div class="setgrid">
@@ -509,6 +569,20 @@
           <p class="hint" id="workDirLabel">Nenhuma pasta autorizada.</p>
         </div>
       </section>
+      <section class="set-block" id="secMem">
+        <h2><i data-lucide="brain"></i> <span data-i18n="set.navMem">Memória do Agente</span></h2>
+        <p class="hint" style="margin-top:0" data-i18n="set.memHint">O agente aprende com suas correções e guarda tudo numa nota local editável. Nada disso sai do seu navegador.</p>
+        <div class="btnrow">
+          <button id="btnViewMemory" class="btn ghost sm"><i data-lucide="eye"></i><span data-i18n="set.memView">Ver o que o agente sabe sobre mim</span></button>
+        </div>
+        <label class="fld-check" style="margin-top:12px"><span><input type="checkbox" id="memOn" checked> <span data-i18n="set.memOn">Aprender com correções (salvar na Memória)</span></span></label>
+        <hr class="set-hr">
+        <label class="fld-check"><span><input type="checkbox" id="memNightly" checked> <span data-i18n="set.memNightly">Secretária · resumo noturno da memória + arquivo .md</span></span></label>
+        <label class="fld"><span data-i18n="set.memNightlyAt">Horário do resumo</span><input type="time" id="memNightlyAt" value="23:00"></label>
+        <label class="fld-check" style="margin-top:8px"><span><input type="checkbox" id="memBrief" checked> <span data-i18n="set.memBrief">Briefing da manhã no chat</span></span></label>
+        <label class="fld"><span data-i18n="set.memBriefAt">Horário do briefing</span><input type="time" id="memBriefAt" value="07:00"></label>
+        <p class="hint" data-i18n="set.memSubHint">Os subagentes Secretária e Briefing aparecem na aba Agentes e podem ser editados lá. Rodam só com provedor conectado.</p>
+      </section>
       <section class="set-block" id="secCode">
         <h2><i data-lucide="code"></i> <span data-i18n="set.navCode">Coding Agent</span></h2>
         <label class="fld"><span data-i18n="set.mode">Modo</span>
@@ -536,6 +610,53 @@
         </div>
         <p class="hint"><i data-lucide="lock"></i> <span data-i18n="set.codingHint">Escrita restrita à pasta autorizada. Sem bridge, shell é negado. Rode <code>python3 bridge.py</code> na pasta do projeto p/ liberar shell local.</span></p>
       </section>
+      <section class="set-block" id="secHelp">
+        <h2><i data-lucide="circle-help"></i> <span data-i18n="set.navHelp">Ajuda</span></h2>
+        <p class="hint" style="margin-top:0" data-i18n="set.helpIntro">Guia rápido do Free Agent: como configurar tudo e usar o aplicativo. Tudo roda no seu navegador — nada sai do seu PC.</p>
+        <div class="helpgrid">
+          <div class="helpcard">
+            <h3><i data-lucide="cpu"></i> <span data-i18n="set.help1T">1 · Conectar um provedor</span></h3>
+            <p data-i18n="set.help1B">Vá em <b>Conexão &amp; Modelo</b>: escolha o provedor (Groq é grátis e rápido), cole a API key, clique em <b>Atualizar</b> para ver os modelos, escolha um e clique em <b>Salvar</b> + <b>Testar conexão</b>. As chaves ficam só no seu navegador (localStorage).</p>
+          </div>
+          <div class="helpcard">
+            <h3><i data-lucide="key-round"></i> <span data-i18n="set.help2T">2 · Onde conseguir chaves</span></h3>
+            <p data-i18n="set.help2B">Clique no link <b>Onde conseguir chaves</b> na seção Conexão. Lá tem passo a passo de como criar conta e gerar chave grátis no Groq, Google AI Studio, OpenRouter e outros.</p>
+          </div>
+          <div class="helpcard">
+            <h3><i data-lucide="message-circle"></i> <span data-i18n="set.help3T">3 · Usar o chat</span></h3>
+            <p data-i18n="set.help3B">Digite e mande. Use <b>@NomeDoAgente</b> no início da mensagem para falar com um subagente específico. O agente pode pesquisar a web, ler suas notas e conversas, e executar ações (toca, baixa, abre links) quando você pedir.</p>
+          </div>
+          <div class="helpcard">
+            <h3><i data-lucide="users"></i> <span data-i18n="set.help4T">4 · Equipe de agentes</span></h3>
+            <p data-i18n="set.help4B">Na aba <b>Agentes</b> crie subagentes com nome, ícone e personalidade. O ponto do lado fica <b>verde</b> só quando o agente está trabalhando. Use <b>@nome</b> no chat ou peça uma tarefa com vários itens — o agente principal divide entre a equipe.</p>
+          </div>
+          <div class="helpcard">
+            <h3><i data-lucide="brain"></i> <span data-i18n="set.help5T">5 · Memória do Agente</span></h3>
+            <p data-i18n="set.help5B">Quando você corrige o agente ("não é X, é Y"), ele aprende e guarda na nota <b>Memória do Agente</b> (visível nesta tela). A <b>Secretária</b> resume a memória toda noite e a <b>Briefing</b> entrega um resumo de manhã no chat. Ambas podem ser ligadas/desligadas aqui.</p>
+          </div>
+          <div class="helpcard">
+            <h3><i data-lucide="palette"></i> <span data-i18n="set.help6T">6 · Aparência e fundo</span></h3>
+            <p data-i18n="set.help6B">Em <b>Aparência &amp; Fundo</b>: tema (Light/Dark/Glass), idioma, nome do mascote, imagem de fundo (galeria ou sua foto), desfoque, intensidade 3D e tela de descanso. Pausar fundo economiza bateria.</p>
+          </div>
+          <div class="helpcard">
+            <h3><i data-lucide="database"></i> <span data-i18n="set.help7T">7 · Backup e dados</span></h3>
+            <p data-i18n="set.help7B">Em <b>Meus dados</b>: <b>Exportar</b> salva tudo (provedores, rotinas, skills, notas, conversas) em JSON. <b>Importar</b> restaura esse arquivo. <b>Autorizar pasta</b> dá acesso aos arquivos locais para o agente ler/escrever.</p>
+          </div>
+          <div class="helpcard">
+            <h3><i data-lucide="code"></i> <span data-i18n="set.help8T">8 · Coding Agent</span></h3>
+            <p data-i18n="set.help8B">Modo <b>Plan</b> só lê e planeja; modo <b>Build</b> pode escrever arquivos (sempre restrito à pasta autorizada). Para shell local, rode <code>python3 bridge.py</code> na pasta do projeto e teste a bridge aqui.</p>
+          </div>
+          <div class="helpcard">
+            <h3><i data-lucide="shield-check"></i> <span data-i18n="set.help9T">9 · Segurança e privacidade</span></h3>
+            <p data-i18n="set.help9B">Suas chaves ficam <b>apenas</b> no seu navegador — nunca são enviadas a nenhum servidor nosso (não temos servidor). As chamadas vão direto da sua máquina para a API oficial do provedor. Nada de contas, login ou rastreamento.</p>
+          </div>
+          <div class="helpcard">
+            <h3><i data-lucide="lightbulb"></i> <span data-i18n="set.help10T">10 · Dicas rápidas</span></h3>
+            <p data-i18n="set.help10B">Comandos no chat: <code>/limpar</code> limpa a conversa, <code>/ajuda</code> mostra comandos. Peça coisas específicas ("baixe X", "toque Y") — o agente confirma o que executou. Se algo travar, recarregue a página (Ctrl+Shift+R); seus dados continuam salvos.</p>
+          </div>
+        </div>
+        <p class="hint" style="margin-top:16px"><i data-lucide="external-link"></i> <span data-i18n="set.helpMore">Mais dúvidas? O README do projeto (README.md) tem o guia completo em português e inglês.</span></p>
+      </section>
     </div>
       </div>
     </div>
@@ -543,6 +664,16 @@
 </div>
 
 <!-- Modal nota (visualização) -->
+<div id="convsModal" class="modal" hidden>
+  <div class="modal-card wide">
+    <div class="modal-head">
+      <h3><i data-lucide="history"></i> <span data-i18n="convs.allTitle">Todas as conversas</span> <span id="convsCount" class="src"></span></h3>
+      <button id="convsModalClose" class="btn ghost sm icon-only"><i data-lucide="x"></i></button>
+    </div>
+    <div id="convsGrid" class="convs-grid"></div>
+  </div>
+</div>
+
 <div id="noteModal" class="modal" hidden>
   <div class="modal-card">
     <div class="modal-head">
@@ -596,9 +727,11 @@
 <script type="module" src="js/neural.js"></script>
 <script type="module" src="js/v2-bridge.js"></script>
 <script src="js/code-agent.js"></script>
+<script src="js/term-live.js"></script>
 <script src="js/sandbox.js"></script>
 <script src="js/i18n.js"></script>
 <script src="js/app.js"></script>
+<script src="js/telegram.js"></script>
 <script src="js/clockwx.js"></script>
 <script src="js/voice.js"></script>
 <script>if(/[\?&]eval=1/.test(location.search)){var s=document.createElement('script');s.src='eval/browser-eval.js';s.onload=function(){var i=setInterval(function(){if(window.runBrowserEval){clearInterval(i);setTimeout(window.runBrowserEval,1500)}},300)};document.body.appendChild(s);}</script>

@@ -6,7 +6,7 @@
 
 export const TOOLS = {
   web_search: {
-    desc: 'Buscar fato atual/externo (Wiki + DDG + HN).',
+    desc: 'Buscar fato atual/externo (Wiki + DDG + HN). SÓ se o usuário pedir busca expressamente (pesquise/busque/notícias/preço/clima).',
     schema: { type: 'object', properties: { query: { type: 'string', maxLength: 200 } }, required: ['query'] },
     needsApproval: false,
     renderHint: () => `<tool name="web_search">sua consulta</tool>`,
@@ -144,12 +144,18 @@ export const TOOLS = {
     needsApproval: false,
     renderHint: () => `<tool name="read_conv">{"match":"trecho do título ou id"}</tool>`,
   },
+  save_correction: {
+    desc: 'Salvar uma correção/preferência do usuário na Memória do Agente. Use quando o usuário corrigir algo claramente.',
+    schema: { type: 'object', properties: { text: { type: 'string', maxLength: 400 } }, required: ['text'] },
+    needsApproval: false,
+    renderHint: () => `<tool name="save_correction">resumo da correção em 1 linha</tool>`,
+  },
 };
 
 // System enxuto: nomes + 1 linha cada + slugs (sem prompts das skills)
 export function buildToolsSection(activeSlugs) {
   const lines = [
-    `- web_search(query): fato atual/externo.`,
+    `- web_search(query): SÓ se pedir pesquisar/buscar/notícias/preço/clima. NUNCA do nada.`,
     `- web_open(url): ler 1 página https.`,
     `- run_skill(slug): [${activeSlugs.join(', ') || 'nenhuma ativa'}]`,
     `- open_site(alvo): só se usuário pediu abrir/ver.`,
@@ -165,6 +171,7 @@ export function buildToolsSection(activeSlugs) {
     `- delete_note(match): deletar nota por trecho/nº.`,
     `- list_convs: listar conversas salvas.`,
     `- read_conv({"match"}): ler mensagens de uma conversa (trecho do título ou id).`,
+    `- save_correction(texto): salvar correção/preferência do usuário na Memória do Agente.`,
     `- code_read({"path"}): ler arquivo do projeto.`,
     `- code_list({"path"}): listar pasta.`,
     `- code_glob({"pattern"}): achar arquivos.`,
@@ -178,7 +185,7 @@ export function buildToolsSection(activeSlugs) {
 
 export function parseToolCall(text) {
   const s = String(text || '');
-  const m = s.match(/<tool\s+name=["'](web_search|web_open|open_site|run_skill|music_search|music_download|music_play|create_task|list_tasks|complete_task|delete_task|create_note|list_notes|edit_note|delete_note|list_convs|read_conv|news|code_read|code_list|code_glob|code_grep|code_write|code_edit|code_bash)["']\s*>([\s\S]*?)<\/tool>/i);
+  const m = s.match(/<tool\s+name=["'](web_search|web_open|open_site|run_skill|music_search|music_download|music_play|create_task|list_tasks|complete_task|delete_task|create_note|list_notes|edit_note|delete_note|list_convs|read_conv|save_correction|news|code_read|code_list|code_glob|code_grep|code_write|code_edit|code_bash)["']\s*>([\s\S]*?)<\/tool>/i);
   if (m) {
     let name = m[1].toLowerCase();
     if (name === 'news') name = 'web_search'; // compat legado

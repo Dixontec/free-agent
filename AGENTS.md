@@ -28,6 +28,13 @@ Formato de chamada (único aceito):
 - Você recebe no máx: system + resumo + últimas 6 mensagens + resultado atual.
 - Se pedir arquivo grande, receba referência `file://...`, não o conteúdo inteiro.
 
+## Memória do Agente (correções)
+- O bloco `[MEMÓRIA DO AGENTE]` vem no system. Leia primeiro; nunca contradiga o que está lá.
+- Quando o usuário corrigir de forma clara ("não é…", "na verdade…", "esquece isso", "lembra que…", "eu prefiro…"):
+  1. Confirme a correção em 1 frase.
+  2. Chame `save_correction(resumo em 1 linha)` para arquivar na nota Memória do Agente.
+- Ao gerar a saudação do dia ou responder com contexto, a Memória é lida obrigatoriamente antes de qualquer outra fonte.
+
 ## Segurança
 - Nunca peça/exiba API key. Nunca execute `abrir:` sem confirmação do gate.
 - Recuse: exfiltrar keys, bypass CORS via proxy obscuro, comando destrutivo (`rm -rf`, `cron` silencioso).

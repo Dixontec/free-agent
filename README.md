@@ -39,11 +39,16 @@ Principles:
 - **10 built-in skills**: deep web research, news digest, morning routine, YouTube player, music & focus, app opener, smart summarizer, Linux automation, multi-provider search, web browser — plus create your own.
 - **Free music, no key**: search Internet Archive + Wikimedia, play instantly or download MP3. Local player with queue, authorized folder, chat commands.
 - **Coding agent (plan/build)**: read, search, edit and create project files with diff preview, per-tool permissions, undo, workspace jailed to the authorized folder, optional local shell via `bridge.py`.
+- **Telegram bot, zero setup** — connects **straight from your browser** to the Telegram API: paste the token from `@BotFather` → **Connect**. No Python, no terminal, no bridge to start. The token lives only in your `localStorage`, long-polling begins by itself whenever the app opens with a saved token, and it recovers automatically after sleep/offline.
+- **Live terminal in the monitor** — the top-right monitor shows the whole app log in real time (color-coded, timestamps, auto-scroll, click to expand), right from the first load.
+- **Web search only when you ask** — the agent searches the web only on an explicit request (`pesquise` / `search` / news / price / weather…), never to decorate an answer; `web_open` still reads any page you paste.
 - **Mascote Agent** — an animated companion face (blinking / sleepy) on its own full-screen page. The mascot sleeps until you connect an AI provider, then wakes up. Fully renameable (Harry, your pet, anything); the name replaces "FREE" in the top bar (can be toggled off in Settings).
 - **AI Life Card** — a draggable info card with the mascot's awakening date + time + moon phase, every model you connected (the list grows as you change models), and **Life Tokens**: a lifetime counter + progress bar of every token spent through the app (any provider, summed). Stored in your browser's `localStorage` — survives app updates and backups. Renaming the mascot intentionally wipes the card and starts a new life cycle.
 - **Multi-language UI** — full interface in **Portuguese (BR)**, **English** and **Spanish**; switch anytime in Settings → Appearance, with dynamic greetings and agent prompts in the chosen language.
 - **Premium themes & backgrounds** — Light · Dark · Glass with a refined, premium look, plus a background gallery with high-resolution organic paper-cut artwork (green and pink) as default first-run theme.
 - **Notes & conversations readable by the AI** — the agent reads your saved notes and past conversations (`list_notes`, `list_convs`, `read_conv`) to answer with real context; full-screen note viewer with one-click copy.
+- **Agent Memory that learns from corrections** — when you correct the agent ("no it's…", "actually…", "forget that", "remember that…"), it confirms and saves the correction to a local **“Agent Memory”** note via the internal `save_correction` tool. The memory is injected into the system prompt, and the day's greeting **must** read it first — the agent stops guessing and starts remembering.
+- **Secretary & Briefing subagents** — the **Secretary** runs every night: summarizes the whole app memory (tasks, reminders, notes, corrections), appends it to the memory note and saves a `free-agent-resumo-YYYY-MM-DD.md` file (authorized folder or Downloads). The **Briefing** subagent posts a morning summary in the chat at your chosen time. Both are configurable in Settings → Agent Memory and editable in the Agents tab.
 - Three.js 3D background + aurora, system monitor, clock + weather, reminders, notes, full log + agent traces, JSON export/import without secrets.
 - **Automated eval**: `node eval/run-eval.mjs` (logic + real loop) + in-browser self-test `?eval=1` against the live app, fully isolated from your data.
 
@@ -78,11 +83,13 @@ Prerequisite: any modern browser + Python 3 (only to serve local files).
 ```bash
 git clone https://github.com/Dixontec/free-agent.git
 cd free-agent
-python3 -m http.server 8080
+python3 serve.py           # app + Telegram/Coding endpoints, same port
 # open http://localhost:8080
 ```
 
 > Use a local server (not `file://`) so Three.js modules load from CDN.
+> `serve.py` is the integrated one (same port 8080) — it also exposes `/health`
+> and `/tg-*`, so **Settings → Telegram → Connect** works with no extra setup.
 
 Full guide: [`docs/en/install.md`](docs/en/install.md)
 
@@ -176,11 +183,16 @@ Princípios:
 - **10 skills ativas por padrão**: pesquisa web profunda, digest de notícias, rotina da manhã, YouTube player, música & foco, abridor de apps, resumo inteligente, automação Linux, busca multi-provedor, navegador web — e você pode criar as suas.
 - **Música livre sem chave**: busca em Internet Archive + Wikimedia, toca na hora ou baixa MP3. Player local com fila, pasta autorizada, comandos pelo chat.
 - **Coding agent (plan/build)**: leia, busque, edite e crie arquivos do projeto com diff preview, permissões por ferramenta, undo, workspace restrito à pasta autorizada e shell local opcional via `bridge.py`.
+- **Bot do Telegram, sem setup** — conecta **direto do seu navegador** à API do Telegram: cole o token do `@BotFather` → **Conectar**. Sem Python, sem terminal, sem ponte pra subir. O token fica só no seu `localStorage`, o long-polling começa sozinho toda vez que o app abre com token salvo e se recupera depois de tela dormir/offline.
+- **Terminal ao vivo no monitor** — o monitor do canto superior direito mostra o log inteiro da aplicação em tempo real (linhas coloridas, horários, auto-scroll, clique para ampliar), já na primeira abertura.
+- **Busca web só quando você pedir** — o agente pesquisa a web apenas a pedido explícito (`pesquise` / `busca` / notícias / preço / clima…), nunca para enfeitar a resposta; o `web_open` continua lendo qualquer página que você colar.
 - **Mascote Agent** — um rostinho animado (piscando / sonolento) em tela cheia que é o companheiro do seu agente. Dorme enquanto não há provedor conectado e acorda quando você conecta. Pode ser renomeado (Harry, seu pet, o que quiser) e o nome substitui o "FREE" na barra superior (com opção de desligar nas Configurações).
 - **Ai Life Card** — cartão de informações arrastável com a data, hora e fase da lua do despertar do mascote, todos os modelos que você conectou (a lista cresce a cada troca) e os **Tokens de Vida**: um contador vitalício + barra de progresso de todos os tokens gastos pela aplicação (qualquer provedor, somados). Fica no `localStorage` do seu navegador — sobrevive a atualizações e backups. Renomear o mascote zera o cartão e inicia um novo ciclo de vida.
 - **Interface multi-idioma** — interface completa em **português (BR)**, **inglês** e **espanhol**; troque a qualquer momento em Configurações → Aparência, com saudações dinâmicas e prompts do agente no idioma escolhido.
 - **Temas e fundos premium** — Light · Dark · Glass com visual refinado e mais premium, além de uma galeria de fundos com arte orgânica paper-cut em alta resolução (verde e rosa) como tema padrão na primeira abertura.
 - **Notas e conversas legíveis pela IA** — o agente lê suas notas salvas e conversas anteriores (`list_notes`, `list_convs`, `read_conv`) para responder com contexto real; visualizador de notas em tela cheia com cópia em 1 clique.
+- **Memória do Agente que aprende com correções** — quando você corrige o agente ("não é…", "na verdade…", "esquece isso", "lembra que…"), ele confirma e salva a correção na nota local **“Memória do Agente”** via a tool interna `save_correction`. A memória é injetada no system prompt e a saudação do dia **obrigatoriamente** lê primeiro — o agente para de chutar e passa a lembrar.
+- **Subagentes Secretária e Briefing** — a **Secretária** roda toda noite: resume a memória inteira da aplicação (tarefas, lembretes, notas, correções), anexa ao bloco de resumo da nota e salva o arquivo `free-agent-resumo-YYYY-MM-DD.md` (pasta autorizada ou Downloads). O subagente **Briefing** publica o resumo da manhã no chat no horário que você escolher. Ambos ficam em Configurações → Memória do Agente e podem ser editados na aba Agentes.
 - Fundo 3D Three.js + aurora, monitor de sistema, relógio + clima, lembretes, notas, log completo + traces do agente, export/import JSON sem segredos.
 - **Eval automatizado**: `node eval/run-eval.mjs` (lógica + loop real) + self-test no navegador `?eval=1` contra o app vivo, com isolamento total dos seus dados.
 
@@ -215,11 +227,13 @@ Pré-requisito: qualquer navegador moderno + Python 3 (só para servir os arquiv
 ```bash
 git clone https://github.com/Dixontec/free-agent.git
 cd free-agent
-python3 -m http.server 8080
+python3 serve.py           # app + endpoints do Telegram/Coding na mesma porta
 # abra http://localhost:8080
 ```
 
 > Use um servidor local (não `file://`) para os módulos Three.js via CDN funcionarem.
+> O `serve.py` é o servidor integrado (mesma porta 8080) — ele também expõe `/health`
+> e `/tg-*`, então **Configurações → Telegram → Conectar** funciona sem nenhum extra.
 
 Guia completo: [`docs/pt-BR/instalacao.md`](docs/pt-BR/instalacao.md)
 
@@ -278,6 +292,7 @@ Ver a árvore na seção inglesa — os nomes de arquivos são idênticos. Arqui
 | [Architecture](docs/en/architecture.md) | [Arquitetura](docs/pt-BR/arquitetura.md) |
 | [Security](docs/en/security.md) | [Segurança](docs/pt-BR/seguranca.md) |
 | [Eval](docs/en/eval.md) | [Eval](docs/pt-BR/eval.md) |
+| [Changelog](docs/en/changelog.md) | [Changelog](docs/pt-BR/changelog.md) |
 | [FAQ](docs/en/faq.md) | [FAQ](docs/pt-BR/faq.md) |
 
 Advanced: [AGENTS.md](AGENTS.md) (system prompt) · [HARNESS.md](HARNESS.md) (v2 architecture) · [eval/README.md](eval/README.md) · [CONTRIBUTING.md](CONTRIBUTING.md) · [SECURITY.md](SECURITY.md)

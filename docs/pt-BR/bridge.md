@@ -1,5 +1,10 @@
 # Bridge & Coding Agent — Free Agent
 
+> **O Telegram não precisa desta ponte.** O bot conecta direto do navegador para
+> `api.telegram.org` (CORS aberto, long-polling em `GET` puro) — cole o token em
+> ⚙ → Telegram → **Conectar**. Sem processo, sem terminal. A ponte abaixo é só para o
+> **shell local do coding agent** e para a busca interna do YouTube.
+
 ## Modos
 
 - **Plan**: só leitura + planejamento (recomendado para explorar).
@@ -17,6 +22,10 @@ Libera shell real no projeto + busca YouTube interna.
 python3 bridge.py --root /caminho/do/projeto --port 8787
 # TOKEN impresso no terminal → cole em ⚙ → Coding → Bridge → Testar bridge
 ```
+
+Alternativamente, `python3 serve.py` roda o app **e** todos os endpoints locais juntos
+na porta `8080` (arquivos estáticos + `/health` + `/exec` + `/ytsearch` + `/tg-*`) — um
+processo em vez de dois.
 
 Opcional (busca YouTube interna):
 

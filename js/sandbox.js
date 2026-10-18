@@ -19,7 +19,7 @@ window.Sandbox = (() => {
     return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
   function standbyHTML() {
-    return `<div class="sb-idle"><span class="sb-pulse"></span><b>FREE AGENT</b><small>monitor standby · o preview do código aparece aqui</small></div>`;
+    return `<div class="sb-term"><div class="sb-term-bar"><span class="sb-term-dot"></span><b>FREE AGENT</b><em>terminal ao vivo</em><span class="sb-term-n">● live</span></div><div class="sb-term-body"></div></div>`;
   }
   function bodyHTML() {
     if (state.video) return `<div class="sb-video-slot"></div>`;
@@ -42,6 +42,7 @@ window.Sandbox = (() => {
       const b = document.querySelector('#sandboxBig');
       if (b) b.innerHTML = bodyHTML();
       mountSlot();
+      try { window.Term?.render?.(); } catch {}
     } catch {}
   }
   function show(opts = {}) {
@@ -209,5 +210,7 @@ window.Sandbox = (() => {
       }
     });
   } catch {}
+  // Pinta já na abertura: senão o monitor pequeno fica VAZIO até o 1º open/close.
+  try { paint(); } catch {}
   return { show, previewFile, playVideo, open, close };
 })();
