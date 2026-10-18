@@ -14,3 +14,8 @@ Thumbs.db
 *.log
 .vscode/
 .idea/
+
+# Build do AppImage (gerado pelo electron-builder)
+dist/
+# Extração do AppImage (./Free-Agent-*.AppImage --appimage-extract)
+squashfs-root/

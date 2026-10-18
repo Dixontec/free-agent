@@ -1,0 +1,57 @@
+{
+  "name": "free-agent",
+  "productName": "Free Agent",
+  "version": "1.0.0",
+  "description": "Free Agent — local-first AI harness",
+  "author": "Dixontec",
+  "license": "MIT",
+  "homepage": "https://github.com/Dixontec/free-agent",
+  "desktopName": "free-agent.desktop",
+  "private": true,
+  "main": "desktop/main.js",
+  "scripts": {
+    "start": "electron .",
+    "server": "node -e \"const{createStaticServer}=require('./desktop/server');createStaticServer('.').listen(47811,'127.0.0.1',()=>console.log('Free Agent em http://127.0.0.1:47811'))\"",
+    "dist": "electron-builder --linux AppImage"
+  },
+  "build": {
+    "appId": "com.dixontec.freeagent",
+    "productName": "Free Agent",
+    "asar": true,
+    "npmRebuild": false,
+    "directories": {
+      "output": "dist",
+      "buildResources": "desktop"
+    },
+    "files": [
+      "desktop/**/*",
+      "index.html",
+      "styles.css",
+      "js/**/*",
+      "assets/**/*",
+      "eval/**/*",
+      "!eval/*.md"
+    ],
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "desktop/icon.png",
+      "category": "Utility",
+      "maintainer": "Dixontec",
+      "synopsis": "Local-first AI harness",
+      "executableName": "free-agent",
+      "syncDesktopName": true,
+      "artifactName": "Free-Agent-${version}-x86_64.AppImage"
+    }
+  },
+  "devDependencies": {
+    "electron": "^44.9.0",
+    "electron-builder": "^26.15.3"
+  }
+}
