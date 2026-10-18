@@ -48,6 +48,21 @@
       "executableName": "free-agent",
       "syncDesktopName": true,
       "artifactName": "Free-Agent-${version}-x86_64.AppImage"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "desktop/icon.png",
+      "artifactName": "Free-Agent-Portable-${version}-win64.exe"
+    },
+    "nsis": {
+      "artifactName": "Free-Agent-Portable-${version}-win64.exe"
     }
   },
   "devDependencies": {
