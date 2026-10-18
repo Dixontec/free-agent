@@ -42,6 +42,7 @@ Principles:
 - **Telegram bot, zero setup** — connects **straight from your browser** to the Telegram API: paste the token from `@BotFather` → **Connect**. No Python, no terminal, no bridge to start. The token lives only in your `localStorage`, long-polling begins by itself whenever the app opens with a saved token, and it recovers automatically after sleep/offline.
 - **Live terminal in the monitor** — the top-right monitor shows the whole app log in real time (color-coded, timestamps, auto-scroll, click to expand), right from the first load.
 - **Web search only when you ask** — the agent searches the web only on an explicit request (`pesquise` / `search` / news / price / weather…), never to decorate an answer; `web_open` still reads any page you paste.
+- **Built-in Help tab** — **Settings → Help** has 10 one-screen cards (providers, keys, Telegram, routines, skills, coding, memory, eval, privacy, troubleshooting) plus direct links to every guide.
 - **Mascote Agent** — an animated companion face (blinking / sleepy) on its own full-screen page. The mascot sleeps until you connect an AI provider, then wakes up. Fully renameable (Harry, your pet, anything); the name replaces "FREE" in the top bar (can be toggled off in Settings).
 - **AI Life Card** — a draggable info card with the mascot's awakening date + time + moon phase, every model you connected (the list grows as you change models), and **Life Tokens**: a lifetime counter + progress bar of every token spent through the app (any provider, summed). Stored in your browser's `localStorage` — survives app updates and backups. Renaming the mascot intentionally wipes the card and starts a new life cycle.
 - **Multi-language UI** — full interface in **Portuguese (BR)**, **English** and **Spanish**; switch anytime in Settings → Appearance, with dynamic greetings and agent prompts in the chosen language.
@@ -105,8 +106,40 @@ Full guide: [`docs/en/install.md`](docs/en/install.md)
    abrir: https://gmail.com
    ```
 4. To code on a project: **Settings → Coding → Authorize folder**, pick Plan or Build, and (optionally) run `python3 bridge.py --root /path/to/project` to enable local shell with a token.
+5. To talk to your agent from your phone: **Connect a Telegram bot in 30 seconds** (below).
+6. **Not sure where something is?** Open **Settings → Help** — 10 quick cards cover almost everything.
 
 Guides: [`docs/en/usage.md`](docs/en/usage.md) · [`docs/en/routines.md`](docs/en/routines.md) · [`docs/en/skills.md`](docs/en/skills.md) · [`docs/en/providers.md`](docs/en/providers.md) · [`docs/en/bridge.md`](docs/en/bridge.md)
+
+### Connect a Telegram bot in 30 seconds
+
+**No Python, no terminal, no bridge.** The bot talks to Telegram **directly from your
+browser** — the API answers with `access-control-allow-origin: *` and a `GET` long-poll
+is a *simple request*, so no CORS preflight gets in the way. Everything runs in the page.
+
+1. In Telegram open **[@BotFather](https://t.me/BotFather)** and send `/newbot`.
+2. Choose a display name and a `username` that ends in `bot`. BotFather replies with a
+   **token** like `123456789:AAH…` — copy the whole thing.
+3. In Free Agent open **Settings → Telegram** (paper-plane icon), paste the token and
+   click **Connect**. The pill turns green: *connected*.
+4. Send any message to your bot. It answers through the same agent loop — skills, tasks,
+   notes and Agent Memory included. Watch it live in **step 4 · Activity**.
+
+That's the whole integration. A few useful details:
+
+- **It stays connected by itself** — with a saved token the long-polling starts every
+  time you open the app, survives screen-off and Wi-Fi drops (exponential backoff), and
+  turns green again automatically once the network is back.
+- **Works with any local server** — `serve.py`, `python3 -m http.server`, `npx serve`,
+  `php -S`… the page itself is enough, because the connection never leaves your browser.
+  (`serve.py` is only needed for the coding agent's local shell.)
+- **Chat ID (optional)** — paste your own chat ID to allow only that conversation.
+- **Disconnect** stops polling immediately; nothing keeps running afterwards.
+- **Token privacy** — it lives only in your browser's `localStorage` and is sent straight
+  to `api.telegram.org` from your machine. No server of ours in between, nothing logged.
+
+Stuck? Token invalid → copy it again from BotFather with no extra spaces. Connected but
+silent → send `/start` to the bot first, then talk to it.
 
 ### Security & privacy
 
@@ -186,6 +219,7 @@ Princípios:
 - **Bot do Telegram, sem setup** — conecta **direto do seu navegador** à API do Telegram: cole o token do `@BotFather` → **Conectar**. Sem Python, sem terminal, sem ponte pra subir. O token fica só no seu `localStorage`, o long-polling começa sozinho toda vez que o app abre com token salvo e se recupera depois de tela dormir/offline.
 - **Terminal ao vivo no monitor** — o monitor do canto superior direito mostra o log inteiro da aplicação em tempo real (linhas coloridas, horários, auto-scroll, clique para ampliar), já na primeira abertura.
 - **Busca web só quando você pedir** — o agente pesquisa a web apenas a pedido explícito (`pesquise` / `busca` / notícias / preço / clima…), nunca para enfeitar a resposta; o `web_open` continua lendo qualquer página que você colar.
+- **Aba Ajuda embarcada** — **Configurações → Ajuda** tem 10 cards rápidos (provedores, chaves, Telegram, rotinas, skills, coding, memória, eval, privacidade, problemas) com link direto para cada guia.
 - **Mascote Agent** — um rostinho animado (piscando / sonolento) em tela cheia que é o companheiro do seu agente. Dorme enquanto não há provedor conectado e acorda quando você conecta. Pode ser renomeado (Harry, seu pet, o que quiser) e o nome substitui o "FREE" na barra superior (com opção de desligar nas Configurações).
 - **Ai Life Card** — cartão de informações arrastável com a data, hora e fase da lua do despertar do mascote, todos os modelos que você conectou (a lista cresce a cada troca) e os **Tokens de Vida**: um contador vitalício + barra de progresso de todos os tokens gastos pela aplicação (qualquer provedor, somados). Fica no `localStorage` do seu navegador — sobrevive a atualizações e backups. Renomear o mascote zera o cartão e inicia um novo ciclo de vida.
 - **Interface multi-idioma** — interface completa em **português (BR)**, **inglês** e **espanhol**; troque a qualquer momento em Configurações → Aparência, com saudações dinâmicas e prompts do agente no idioma escolhido.
@@ -249,8 +283,43 @@ Guia completo: [`docs/pt-BR/instalacao.md`](docs/pt-BR/instalacao.md)
    abrir: https://gmail.com
    ```
 4. Para codar num projeto: **Configurações → Coding → Autorizar pasta**, escolha Plan ou Build, e (opcional) rode `python3 bridge.py --root /caminho/do/projeto` para liberar shell local com token.
+5. Para falar com o agente pelo celular: **Conecte um bot do Telegram em 30 segundos** (logo abaixo).
+6. **Não achou onde fica alguma coisa?** Abra **Configurações → Ajuda** — 10 cards rápidos cobrem quase tudo.
 
 Guias: [`docs/pt-BR/uso.md`](docs/pt-BR/uso.md) · [`docs/pt-BR/rotinas.md`](docs/pt-BR/rotinas.md) · [`docs/pt-BR/skills.md`](docs/pt-BR/skills.md) · [`docs/pt-BR/provedores.md`](docs/pt-BR/provedores.md) · [`docs/pt-BR/bridge.md`](docs/pt-BR/bridge.md)
+
+### Conecte um bot do Telegram em 30 segundos
+
+**Sem Python, sem terminal, sem ponte.** O bot conversa com o Telegram **direto do seu
+navegador** — a API responde com `access-control-allow-origin: *` e um long-poll em `GET`
+é uma requisição *simples*, então nenhum preflight de CORS atrapalha. Tudo roda na
+própria página.
+
+1. No Telegram abra **[@BotFather](https://t.me/BotFather)** e envie `/newbot`.
+2. Escolha um nome de exibição e um `username` que termine em `bot`. O BotFather responde
+   com um **token** tipo `123456789:AAH…` — copie ele inteiro.
+3. No Free Agent abra **Configurações → Telegram** (ícone do foguete), cole o token e
+   clique em **Conectar**. O selo fica verde: *conectado*.
+4. Mande qualquer mensagem pro seu bot. Ele responde pelo mesmo loop do agente — skills,
+   tarefas, notas e Memória do Agente incluídas. Acompanhe ao vivo no **passo 4 ·
+   Atividade**.
+
+Essa é a integração inteira. Alguns detalhes úteis:
+
+- **Fica conectado sozinho** — com token salvo o long-polling sobe toda vez que você abre
+  o app, aguenta tela dormindo e queda de Wi-Fi (backoff exponencial) e volta a ficar
+  verde sozinho quando a rede volta.
+- **Funciona com qualquer servidor local** — `serve.py`, `python3 -m http.server`,
+  `npx serve`, `php -S`… a própria página basta, porque a conexão nunca sai do seu
+  navegador. (O `serve.py` só é necessário para o shell local do coding agent.)
+- **Chat ID (opcional)** — cole seu próprio chat ID para liberar só aquela conversa.
+- **Desconectar** para o polling na hora; nada continua rodando depois.
+- **Privacidade do token** — ele fica só no `localStorage` do seu navegador e é enviado
+  direto para `api.telegram.org` da sua máquina. Nenhum servidor nosso no caminho, nada
+  é logado.
+
+Travou? Token inválido → copie de novo do BotFather sem espaços extras. Conectado mas
+mudo → envie `/start` pro bot primeiro e depois converse com ele.
 
 ### Segurança e privacidade
 
