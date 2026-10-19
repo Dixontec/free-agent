@@ -14,6 +14,7 @@
     queue: store.get('playlist', []),
     idx: store.get('playidx', -1),
     audio: null,
+    closed: false,
     save() { store.set('playlist', P.queue.slice(0, 100)); store.set('playidx', P.idx); },
     track() { return P.queue[P.idx] || null; },
   };
@@ -27,7 +28,7 @@
     })();
     P.audio.addEventListener('ended', () => next(true));
     P.audio.addEventListener('timeupdate', paintProg);
-    P.audio.addEventListener('play', paintPlay); P.audio.addEventListener('pause', paintPlay);
+    P.audio.addEventListener('play', () => { P.closed = false; paintPlay(); paintBar(); }); P.audio.addEventListener('pause', paintPlay);
     P.audio.addEventListener('error', () => {
       const t = P.track();
       try { toast('x', `Não consegui tocar: <b>${esc((t && t.title) || 'faixa')}</b>. Arquivo indisponível.`); } catch {}
@@ -108,7 +109,7 @@
   function paintBar() {
     const bar = $('#musicBar'); if (!bar) return;
     const t = P.track();
-    bar.hidden = !t && !P.queue.length;
+    bar.hidden = !!P.closed || (!t && !P.queue.length);
     if (t) {
       $('#mbTitle').textContent = t.title || '—';
       $('#mbArtist').textContent = (t.artist || '') + (t.source ? ' · ' + t.source : '');
@@ -246,6 +247,12 @@
     $('#mbPlay') && ($('#mbPlay').onclick = toggle);
     $('#mbNext') && ($('#mbNext').onclick = () => next());
     $('#mbPrev') && ($('#mbPrev').onclick = prev);
+    $('#mbClose') && ($('#mbClose').onclick = () => {
+      P.closed = true;
+      try { const a = ensureAudio(); if (!a.paused) a.pause(); } catch {}
+      const bar = $('#musicBar'); if (bar) bar.hidden = true;
+      paintSide();
+    });
     $('#mbProg') && ($('#mbProg').oninput = e => { const a = ensureAudio(); if (a.duration) a.currentTime = e.target.value / 100 * a.duration; });
     $('#mbVol') && ($('#mbVol').oninput = e => { ensureAudio().volume = e.target.value / 100; });
     // lateral

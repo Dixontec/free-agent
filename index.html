@@ -30,6 +30,10 @@
     <div class="top-center"></div>
     <div class="top-right">
       <div id="connStatus" class="conn"><i data-lucide="wifi"></i><span class="dot"></span><span id="connLabel" data-i18n="nav.disconnected">desconectado</span></div>
+      <div class="upd-wrap">
+        <button id="btnUpdate" class="btn ghost icon-only" title="Atualizações"><i data-lucide="bell"></i><span id="updDot" class="upd-dot" hidden></span></button>
+        <div id="updCard" class="upd-card" hidden></div>
+      </div>
       <button id="btnSettings" class="btn ghost icon-only" title="Configurações"><i data-lucide="settings"></i></button>
     </div>
   </header>
@@ -155,14 +159,18 @@
           <div id="skillMentionPop" hidden></div>
           <textarea id="input" rows="1" data-i18n-ph="c.ph" placeholder="Pergunte, peça pesquisa, rotina…  @slug invoca uma skill  ·  Enter envia · Shift+Enter quebra"></textarea>
         </div>
-        <button type="submit" id="btnSend" class="btn primary icon-only" title="Enviar"><i data-lucide="send"></i></button>
+        <div class="send-wrap">
+          <button type="submit" id="btnSend" class="btn primary icon-only"><i data-lucide="send"></i></button>
+          <div id="sendTip" data-i18n="c.send" hidden>Enviar</div>
+        </div>
       </form>
     </section>
 
     <!-- ══════════ PAINEL DIREITO ══════════ -->
     <aside id="panel" class="glass-card">
+      <div class="panel-scroll">
       <div id="sandboxCard" class="sb-card" title="Monitor Nexus · clique para ampliar">
-        <div class="sb-bar"><span class="sb-dots"><i></i><i></i><i></i></span><b id="sandboxTitle">Nexus · standby</b><span class="sb-expand"><i data-lucide="maximize"></i></span></div>
+        <div class="sb-bar"><span class="sb-dots"><i></i><i></i><i></i></span><b id="sandboxTitle">Monitor Agent</b><span class="sb-expand"><i data-lucide="maximize"></i></span></div>
         <div id="sandboxScreen" class="sb-screen"></div>
       </div>
       <div id="clockWx" title="Hora e temperatura">
@@ -240,7 +248,7 @@
 
       <div class="tabpage" id="tab-tasks" hidden>
         <div class="tabhead"><h3 data-i18n="head.tasks">Tarefas com IA</h3><button id="btnNewTask" class="btn primary sm"><i data-lucide="plus"></i><span data-i18n="head.newTask">Nova tarefa</span></button></div>
-        <form id="taskForm">
+        <form id="taskForm" hidden>
           <div class="taskrow">
             <input id="tText" placeholder="Ex.: pesquisar lançamentos de IA… às 9h me avise" />
             <button class="btn primary sm" type="submit" data-i18n="task.add">Adicionar</button>
@@ -368,6 +376,7 @@
         <p class="hint" style="margin-top:14px"><i data-lucide="shield-check"></i> <span data-i18n="tg.privacy">Privacidade: o token vive no localStorage do seu navegador. A conexão é direta do seu navegador para o api.telegram.org — sem intermediário nosso.</span></p>
       </div>
       <div class="tabpage" id="tab-extra2" hidden></div>
+      </div>
     </aside>
   </main>
   <div id="musicBar" class="glass-card" hidden>
@@ -379,6 +388,7 @@
     <span id="mbTime" class="mono"></span>
     <input id="mbVol" type="range" min="0" max="100" value="100" title="Volume" />
     <button id="mbDl" class="btn ghost sm icon-only" title="Baixar MP3"><i data-lucide="download"></i></button>
+    <button id="mbClose" class="btn ghost sm icon-only" title="Fechar player"><i data-lucide="x"></i></button>
   </div>
   <audio id="musicAudio" preload="none"></audio>
 </div>
@@ -386,7 +396,7 @@
 <!-- ══════════ SANDBOX · monitor ampliado ══════════ -->
 <div id="sandboxOverlay" hidden>
   <div class="sb-stage glass-card">
-    <div class="sb-bar"><span class="sb-dots"><i></i><i></i><i></i></span><b id="sandboxBigTitle">Nexus</b><button id="sandboxClose" class="btn ghost sm icon-only" title="Fechar"><i data-lucide="x"></i></button></div>
+    <div class="sb-bar"><span class="sb-dots"><i></i><i></i><i></i></span><b id="sandboxBigTitle">Monitor Agent</b><button id="sandboxClose" class="btn ghost sm icon-only" title="Fechar"><i data-lucide="x"></i></button></div>
     <div id="sandboxBig" class="sb-big"></div>
   </div>
 </div>
@@ -719,6 +729,19 @@
   </div>
 </div>
 
+<!-- Balão de seleção no chat: copiar / criar nota -->
+<div id="selPop" hidden>
+  <div class="sel-actions">
+    <button type="button" id="selCopy" class="sel-btn"><i data-lucide="copy"></i><span data-i18n="sel.copy">Copiar</span></button>
+    <button type="button" id="selNote" class="sel-btn primary"><i data-lucide="sticky-note"></i><span data-i18n="sel.note">Criar nota</span></button>
+  </div>
+  <form class="sel-name" id="selNameForm">
+    <input id="selName" data-i18n-ph="sel.namePh" placeholder="Nome da nota" autocomplete="off" />
+    <button type="submit" class="sel-btn primary" data-i18n-title="sel.save" title="Salvar nota"><i data-lucide="check"></i></button>
+    <button type="button" id="selCancel" class="sel-btn" data-i18n-title="sel.cancel" title="Cancelar"><i data-lucide="x"></i></button>
+  </form>
+</div>
+
 <script src="js/skills.js"></script>
 <script src="js/music-repos.js"></script>
 <script src="js/local-music.js"></script>
@@ -734,6 +757,7 @@
 <script src="js/telegram.js"></script>
 <script src="js/clockwx.js"></script>
 <script src="js/voice.js"></script>
+<script src="js/updates.js"></script>
 <script>if(/[\?&]eval=1/.test(location.search)){var s=document.createElement('script');s.src='eval/browser-eval.js';s.onload=function(){var i=setInterval(function(){if(window.runBrowserEval){clearInterval(i);setTimeout(window.runBrowserEval,1500)}},300)};document.body.appendChild(s);}</script>
 </body>
 </html>

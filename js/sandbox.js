@@ -6,7 +6,7 @@
 */
 'use strict';
 window.Sandbox = (() => {
-  const state = { title: 'Nexus · standby', html: '', code: '', lang: 'txt', video: null };
+  const state = { title: 'Monitor Agent', html: '', code: '', lang: 'txt', video: null };
   const PREVIEW_EXT = /\.(html?|css|js|json|md|txt|py|sh|xml|svg|jsx|tsx|yml)$/i;
 
   function icons() { try { if (window.lucide) lucide.createIcons(); } catch {} }
@@ -19,7 +19,7 @@ window.Sandbox = (() => {
     return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
   function standbyHTML() {
-    return `<div class="sb-term"><div class="sb-term-bar"><span class="sb-term-dot"></span><b>FREE AGENT</b><em>terminal ao vivo</em><span class="sb-term-n">● live</span></div><div class="sb-term-body"></div></div>`;
+    return `<div class="sb-term"><div class="sb-term-bar"><span class="sb-term-dot"></span><b>FREE AGENT</b><em>terminal ao vivo</em><span class="sb-term-n">● live</span><button class="sb-term-roll" data-roll type="button" title="Pausar autorrolagem"><i data-lucide="pause"></i></button></div><div class="sb-term-body"></div></div>`;
   }
   function bodyHTML() {
     if (state.video) return `<div class="sb-video-slot"></div>`;
@@ -187,9 +187,13 @@ window.Sandbox = (() => {
     return true;
   }
   function open() {
+    // Ao abrir o monitor, o terminal aparece com autorroll ligado.
+    try { window.Term?.setAuto?.(true); } catch {}
     paint();
     mountSlot();
     try { document.querySelector('#sandboxOverlay').hidden = false; } catch {}
+    // Overlay visível = layout pronto → desce o terminal até o fim na hora.
+    try { window.Term?.rollOpen?.(); } catch {}
     mountSlot();
   }
   function close() {

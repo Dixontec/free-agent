@@ -1007,6 +1007,27 @@ if ($('#chipSave')) $('#chipSave').onclick = () => {
   wrap.addEventListener('mouseleave', hide);
 })();
 
+/* ── TOOLTIP DE ENVIAR (hover → mesmo popup discreto do mic/clipe) ── */
+(() => {
+  const wrap = $('.send-wrap'), tip = $('#sendTip');
+  if (!wrap || !tip) return;
+  let t1 = null, t2 = null;
+  const show = () => {
+    clearTimeout(t1); clearTimeout(t2);
+    tip.hidden = false;
+    requestAnimationFrame(() => requestAnimationFrame(() => tip.classList.add('show')));
+  };
+  const hide = () => {
+    clearTimeout(t1); clearTimeout(t2);
+    t1 = setTimeout(() => {
+      tip.classList.remove('show');
+      t2 = setTimeout(() => { if (!tip.classList.contains('show')) tip.hidden = true; }, 200);
+    }, 120);
+  };
+  wrap.addEventListener('mouseenter', show);
+  wrap.addEventListener('mouseleave', hide);
+})();
+
 $('#composer').addEventListener('submit', async e => {
   e.preventDefault();
   const text = $('#input').value.trim();
@@ -1930,6 +1951,7 @@ $('#taskForm').onsubmit = e => {
   const v = $('#tText').value.trim(); if (!v) return;
   createTask(v);
   $('#tText').value = '';
+  $('#taskForm').hidden = true;
 };
 function createTask(text) {
   const v = String(text || '').trim().slice(0, 200);
@@ -1941,7 +1963,7 @@ function createTask(text) {
   log('Tarefa criada: ' + v.slice(0, 80), 'ok');
   return t[0];
 }
-$('#btnNewTask').onclick = () => $('#tText').focus();
+$('#btnNewTask').onclick = () => { $('#taskForm').hidden = false; $('#tText').focus(); };
 
 /* ───────── NOTAS ───────── */
 function getNotes() {
@@ -2042,6 +2064,71 @@ $('#noteForm').onsubmit = e => {
   $('#nTitle').value = ''; $('#nText').value = '';
   toast('sticky-note', 'Nota salva.');
 };
+
+/* ───────── SELEÇÃO NO CHAT → copiar / criar nota ───────── */
+(function () {
+  const pop = $('#selPop'), msgs = $('#messages');
+  if (!pop || !msgs) return;
+  const input = $('#selName'), form = $('#selNameForm');
+  let raw = '', body = '', rect = null, raf = 0, block = 0;
+
+  function place() {
+    if (!rect) return;
+    const w = pop.offsetWidth, h = pop.offsetHeight;
+    let x = rect.left + rect.width / 2 - w / 2;
+    let y = rect.top - h - 10;
+    if (y < 8) y = rect.bottom + 10;
+    x = Math.max(8, Math.min(x, window.innerWidth - w - 8));
+    y = Math.max(8, Math.min(y, window.innerHeight - h - 8));
+    pop.style.left = x + 'px'; pop.style.top = y + 'px';
+  }
+  function hide() { pop.hidden = true; pop.classList.remove('naming'); }
+  function show() { pop.hidden = false; place(); }
+  function check() {
+    raf = 0;
+    if (Date.now() < block) return;
+    if (!pop.hidden && pop.classList.contains('naming')) return;
+    const s = window.getSelection();
+    if (!s || s.isCollapsed || !s.rangeCount) { hide(); return; }
+    const n = s.anchorNode;
+    const el = n && (n.nodeType === 1 ? n : n.parentNode);
+    const txt = String(s);
+    if (!el || !msgs.contains(el) || !txt.trim()) { hide(); return; }
+    raw = txt; body = txt.trim(); rect = s.getRangeAt(0).getBoundingClientRect();
+    show();
+  }
+  function schedule() { if (!raf) raf = requestAnimationFrame(check); }
+  function copyFallback(t) {
+    try { const ta = document.createElement('textarea'); ta.value = t; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); toast('copy', I18N.t('sel.copied')); }
+    catch { toast('x', 'Não consegui copiar.'); }
+  }
+
+  document.addEventListener('selectionchange', schedule);
+  document.addEventListener('mouseup', schedule);
+  document.addEventListener('touchend', schedule);
+  document.addEventListener('keyup', schedule);
+  document.addEventListener('mousedown', e => { if (!pop.hidden && !pop.contains(e.target)) hide(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !pop.hidden) hide(); });
+  window.addEventListener('resize', hide);
+  msgs.addEventListener('scroll', hide);
+  pop.addEventListener('mousedown', e => { if (!e.target.closest('input')) e.preventDefault(); });
+
+  $('#selCopy').onclick = async () => {
+    const t = raw; block = Date.now() + 500; hide();
+    if (!t) return;
+    try { await navigator.clipboard.writeText(t); toast('copy', I18N.t('sel.copied')); }
+    catch { copyFallback(t); }
+  };
+  $('#selNote').onclick = () => { pop.classList.add('naming'); input.value = ''; place(); input.focus(); };
+  $('#selCancel').onclick = hide;
+  form.onsubmit = e => {
+    e.preventDefault();
+    const title = input.value.trim();
+    const text = body;
+    hide();
+    if (text) createNote(title, text, 'manual');
+  };
+})();
 
 /* ───────── MEMÓRIA DO AGENTE (aprende com correções) ───────── */
 const MEM_ID = 'agent-mem';
