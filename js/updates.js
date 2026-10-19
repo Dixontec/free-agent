@@ -8,7 +8,7 @@
 (function () {
   const API = 'https://api.github.com/repos/Dixontec/free-agent/releases/latest';
   const REPO = 'https://github.com/Dixontec/free-agent/releases';
-  const APP_VERSION = '1.0.0'; /* mantém em sincronia com package.json */
+  const APP_VERSION = '1.0.1'; /* mantém em sincronia com package.json */
   const KEY = 'nexus:updchk';
   const TTL = 6 * 60 * 60 * 1000; /* 6h entre buscas automáticas */
   const COOL = 20 * 1000;         /* 20s entre verificações manuais */
