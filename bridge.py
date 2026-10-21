@@ -16,6 +16,8 @@ import json
 import os
 import re
 import secrets
+import shutil
+import signal
 import subprocess
 import sys
 import threading
@@ -383,7 +385,64 @@ class Handler(BaseHTTPRequestHandler):
         sys.stderr.write("bridge: " + fmt % args + "\n")
 
 
-def serve(port=8787, root="."):
+def _start_browser_service(port):
+    node = shutil.which("node")
+    if not node:
+        print("Aviso: Node não encontrado; app continua sem iniciar o navegador.", file=sys.stderr)
+        return None
+    origins = ["http://%s:%d" % (host, p)
+               for p in sorted({3000, 47811, port})
+               for host in ("localhost", "127.0.0.1")]
+    script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web", "browser-service.cjs")
+    options = {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == "nt" else {"start_new_session": True}
+    try:
+        child = subprocess.Popen(
+            [node, script, "--port", "47812", "--origins", ",".join(origins)],
+            stdin=subprocess.PIPE, **options,
+        )
+    except OSError:
+        print("Aviso: não foi possível iniciar o navegador; app continua disponível.", file=sys.stderr)
+        return None
+
+    def monitor():
+        if child.wait() != 0:
+            print("Aviso: serviço de navegador encerrou com erro; verifique Node/dependências e se a porta 47812 já está em uso. Nenhum processo existente foi encerrado; app continua disponível.", file=sys.stderr)
+
+    threading.Thread(target=monitor, daemon=True).start()
+    return child
+
+
+def _stop_browser_service(child):
+    if child is None:
+        return
+    try:
+        if child.poll() is None:
+            try:
+                child.stdin.write(b"shutdown\n")
+                child.stdin.flush()
+                child.stdin.close()  # EOF is also an explicit cooperative shutdown.
+            except (OSError, ValueError):
+                pass
+            try:
+                child.wait(timeout=8)
+            except subprocess.TimeoutExpired:
+                print("Aviso: navegador não encerrou em 8s; finalizando apenas a árvore do processo filho.", file=sys.stderr)
+                if os.name == "nt":
+                    subprocess.run(["taskkill", "/T", "/F", "/PID", str(child.pid)],
+                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=8)
+                else:
+                    try:
+                        os.killpg(child.pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+                child.wait(timeout=8)
+    except (OSError, subprocess.TimeoutExpired):
+        print("Aviso: não foi possível confirmar o encerramento do navegador filho.", file=sys.stderr)
+    finally:
+        child.stdin.close()
+
+
+def serve(port=8787, root=".", browser=None):
     root = os.path.abspath(root)
     token = secrets.token_hex(16)
     print("token sha256: %s" % hashlib.sha256(token.encode()).hexdigest())
@@ -392,18 +451,31 @@ def serve(port=8787, root="."):
     srv.token = token
     print("Free Agent ON  http://127.0.0.1:%d  root=%s" % (port, root))
     print("TOKEN (cole no app): %s" % token)
+    child = None
     try:
+        if browser is True or (browser is None and port == 8080):
+            child = _start_browser_service(srv.server_address[1])
         srv.serve_forever()
     except KeyboardInterrupt:
         pass
+    finally:
+        srv.server_close()
+        _stop_browser_service(child)
 
 
 def main(default_port=8787):
     ap = argparse.ArgumentParser()
     ap.add_argument("--port", type=int, default=default_port)
     ap.add_argument("--root", default=".")
+    browser = ap.add_mutually_exclusive_group()
+    browser.add_argument("--no-browser", dest="browser", action="store_false",
+                         help="não iniciar o serviço de navegador Node")
+    browser.add_argument("--browser", dest="browser", action="store_true",
+                         help="iniciar o navegador também no modo bridge-only")
+    ap.set_defaults(browser=None)
     args = ap.parse_args()
-    serve(args.port, args.root)
+    enabled = args.browser if args.browser is not None else (default_port == 8080 or args.port == 8080)
+    serve(args.port, args.root, browser=enabled)
 
 
 if __name__ == "__main__":

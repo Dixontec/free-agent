@@ -11,8 +11,14 @@
   "main": "desktop/main.js",
   "scripts": {
     "start": "electron .",
-    "server": "node -e \"const{createStaticServer}=require('./desktop/server');createStaticServer('.').listen(47811,'127.0.0.1',()=>console.log('Free Agent em http://127.0.0.1:47811'))\"",
-    "dist": "electron-builder --linux AppImage"
+    "server": "node web/start-local.cjs",
+    "dist": "electron-builder --linux AppImage",
+    "dev:web": "node desktop/dev-run.cjs web",
+    "dev:electron": "node desktop/dev-run.cjs electron",
+    "test:browser": "node eval/browser-policy-eval.cjs && node eval/rtc-policy-eval.cjs && node eval/matrix-eval.mjs && node eval/run-eval.mjs && node eval/browser-agent-eval.mjs && node eval/browser-dev-eval.cjs && node eval/browser-restart-eval.cjs && node eval/browser-controls-run.cjs && node eval/browser-web-security.cjs && node eval/browser-workspace-eval.cjs && node eval/browser-audit-v5-run.cjs && node eval/browser-fullscreen-web-eval.cjs && node eval/browser-av-eval.cjs",
+    "dist:win": "electron-builder --win portable --x64",
+    "test:browser:package": "node eval/browser-packaged-eval.cjs",
+    "test:browser:portable": "node eval/browser-portable-eval.cjs"
   },
   "build": {
     "appId": "com.dixontec.freeagent",
@@ -27,6 +33,7 @@
       "desktop/**/*",
       "index.html",
       "styles.css",
+      "browser-drawer.css",
       "js/**/*",
       "assets/**/*",
       "eval/**/*",
@@ -68,5 +75,12 @@
   "devDependencies": {
     "electron": "^44.9.0",
     "electron-builder": "^26.15.3"
+  },
+  "dependencies": {
+    "@ghostery/adblocker": "2.20.1",
+    "multicast-dns": "^7.2.5",
+    "playwright-core": "^1.64.1",
+    "tldts-experimental": "7.4.19",
+    "ws": "^8.22.0"
   }
 }

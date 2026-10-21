@@ -2328,26 +2328,42 @@ function applyBackground() {
   const showAur = bg.mode === 'combo' || bg.mode === 'aurora';
   const showCus = (bg.mode === 'custom' && !!bg.custom) || bg.mode === 'preset';
   const showVid = bg.mode === 'video' && !!bg.preset;
-  const cv = $('#bg3d'), au = $('#aurora'), cu = $('#bgCustom');
+  const showMx = bg.mode === 'matrix' || bg.mode === 'matrix-center';
+  document.documentElement.dataset.matrixActive = String(showMx);
+  const cv = $('#bg3d'), au = $('#aurora'), cu = $('#bgCustom'), mx = $('#bgMatrix');
   if (cv) cv.style.display = show3d ? 'block' : 'none';
   window.__bg3dEnabled = show3d;
   if (au) au.style.display = showAur ? 'block' : 'none';
   if (cu) { cu.style.display = showCus ? 'block' : 'none'; if (showCus) cu.style.backgroundImage = `url("${bg.mode === 'preset' ? bg.preset : bg.custom}")`; }
+  if (mx) mx.style.display = showMx ? 'block' : 'none';
+  window.__matrixBg?.setScope(bg.mode === 'matrix-center');
+  window.__matrixBg?.setActive(showMx);
   const vv = $('#bgVideo');
   if (vv) {
     vv.style.display = showVid ? 'block' : 'none';
     if (showVid) { if (vv.dataset.src !== bg.preset) { vv.dataset.src = bg.preset; vv.src = bg.preset; } vv.play().catch(() => {}); }
     else { try { vv.pause(); } catch {} }
   }
-  [cv, au, cu, vv].forEach(el => {
+  [cv, au, cu, vv, mx].forEach(el => {
     if (!el) return;
-    el.style.filter = bg.blur > 0 ? `blur(${bg.blur}px) saturate(1.15)` : '';
-    el.style.transform = bg.blur > 0 ? 'scale(1.06)' : '';
+    // Em Matrix, suavização subpixel no padrão e teto de 1.2px no slider.
+    // Não ampliar o canvas: scale reamostra o texto e borra seus contornos.
+    const blur = el === mx ? bg.blur / 20 : bg.blur;
+    el.style.filter = blur > 0 ? `blur(${blur}px) saturate(1.15)` : '';
+    el.style.transform = el !== mx && bg.blur > 0 ? 'scale(1.06)' : '';
   });
   const bv = $('#bgBlurVal'); if (bv) bv.textContent = (bg.blur || 0) + 'px';
   const sel = $('#bgSelect'); if (sel && sel.value !== bg.mode) sel.value = bg.mode;
   const bb = $('#bgBlur'); if (bb && +bb.value !== bg.blur) bb.value = bg.blur;
   if ($('#bgUploadWrap')) $('#bgUploadWrap').hidden = bg.mode !== 'custom';
+  const fl = $('#fxLabel');
+  if (fl) {
+    const key = showMx ? 'set.fxMatrix' : 'set.fx';
+    if (fl.dataset.i18n !== key) {
+      fl.setAttribute('data-i18n', key);
+      fl.textContent = (window.I18N && window.I18N.t) ? window.I18N.t(key) : (showMx ? 'Intensidade da chuva' : 'Intensidade 3D');
+    }
+  }
 }
 $('#bgSelect').onchange = () => { const bg = getBg(); bg.mode = $('#bgSelect').value; if (bg.mode === 'preset' && !bg.preset) bg.preset = 'assets/bg-green.jpg'; store.set('bg', bg); applyBackground(); };
 $('#bgBlur').oninput = () => { const bg = getBg(); bg.blur = +$('#bgBlur').value; store.set('bg', bg); applyBackground(); };
@@ -3304,8 +3320,8 @@ const TOOLS_SYS = `\n\n[FERRAMENTAS — web + música local. REGRA DE OURO: se d
 Ao CRIAR código (landing page, site, script), SEMPRE invoque code_write — NUNCA cole o arquivo inteiro no chat.]`;
 function parseToolCall(text) {
   const s = String(text || '');
-  const m = s.match(/<tool\s+name=["'](web_search|web_open|news|open_site|run_skill|music_search|music_download|music_play|create_task|list_tasks|complete_task|delete_task|create_note|list_notes|edit_note|delete_note|list_convs|read_conv|save_correction|code_read|code_list|code_glob|code_grep|code_write|code_edit|code_bash)["']\s*>([\s\S]*?)<\/tool>/i);
-  if (m) { const nm = m[1].toLowerCase(); return { name: nm, arg: m[2].trim().slice(0, nm.startsWith('code_') ? 20000 : 500) }; }
+  const m = s.match(/<tool\s+name=["'](browser_observe|browser_navigate|browser_action|browser_capture|browser_stop|web_search|web_open|news|open_site|run_skill|music_search|music_download|music_play|create_task|list_tasks|complete_task|delete_task|create_note|list_notes|edit_note|delete_note|list_convs|read_conv|save_correction|code_read|code_list|code_glob|code_grep|code_write|code_edit|code_bash)["']\s*>([\s\S]*?)<\/tool>/i);
+  if (m) { const nm = m[1].toLowerCase(); return { name: nm, arg: m[2].trim().slice(0, nm.startsWith('code_') ? 20000 : nm.startsWith('browser_') ? 12000 : 500) }; }
   try {
     const jm = s.match(/\{\s*"name"\s*:\s*"([\w-]+)"\s*,\s*"arguments"\s*:\s*(\{[\s\S]*?\})\s*\}/);
     if (jm) {
@@ -3440,6 +3456,27 @@ async function toolOpen(url) {
 }
 const _searchCache = { q: '', txt: '', ts: 0 };
 async function execTool(name, arg, step) {
+  if (name.startsWith('browser_')) {
+    const browser = window.FreeAgentBrowser;
+    if (!browser) throw Error('Navegador integrado indisponível.');
+    let payload = {};
+    if (name === 'browser_action' || name === 'browser_navigate' || name === 'browser_observe') { try { payload = arg.trim() ? JSON.parse(arg) : {}; } catch { if (name === 'browser_navigate') payload = { value: arg }; else throw Error('Use JSON válido para a ferramenta do navegador.'); } }
+    let result;
+    if (name === 'browser_observe') result = await browser.observe(payload);
+    else if (name === 'browser_navigate') result = await browser.navigate(payload.value);
+    else if (name === 'browser_action') result = await browser.action(payload);
+    else if (name === 'browser_capture') {
+      result = await browser.capture();
+      window.dispatchEvent(new CustomEvent('free-agent-browser-capture', { detail: result }));
+      result = { url: result.url, size: result.size, verified: result.verified, note: 'Captura exibida na interface; use browser_observe para leitura estruturada.' };
+    } else if (name === 'browser_stop') { await browser.stop(); result = { verified: true, stopped: true }; }
+    else throw Error('Ferramenta de navegador desconhecida.');
+    // Keep valid JSON and the observation token/IDs within the harness result budget.
+    const compactObservation = o => o?.elements ? { observation: o.observation, url: o.url, title: o.title.slice(0,120), verified: o.verified, untrustedContent: true, elements: o.elements.slice(0, 12).map(e => ({ id:e.id, tag:e.tag, name:e.name.slice(0,60), type:e.type })), text:o.text.slice(0,1000), nextOffset:o.nextOffset, nextTextOffset:o.nextTextOffset, note: 'Use offset/textOffset em browser_observe para continuar; role para outros elementos.' } : o;
+    if (result?.elements) result = compactObservation(result);
+    else if (result?.observation?.elements) result = { ...result, observation: compactObservation(result.observation) };
+    return '[BROWSER_RESULT]'+JSON.stringify(result);
+  }
   const say = s => { try { step && step(s); } catch {} };
   if (name === 'web_search') {
     const q = String(arg || '').trim().slice(0, 200);

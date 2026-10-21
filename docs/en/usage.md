@@ -34,7 +34,7 @@
 ## Core, themes, background
 
 - **Core** (orbit button): HUD with live activity, max 6 windows.
-- **Themes**: Light · Dark · Glass. **Background**: 3D Core + Aurora, 3D only, Aurora only, custom image or plain. Adjustable intensity/blur; `window.__bg3dEnabled=false` kills 3D with zero loop impact.
+- **Themes**: Light · Dark · Glass. **Background**: 3D Core + Aurora, 3D only, Aurora only, Matrix (digital rain), custom image or plain. Adjustable intensity/blur; `window.__bg3dEnabled=false` kills 3D with zero loop impact.
 - **Rest screen**: clock overlay after N idle minutes (SPACE wakes).
 
 ## Mental shortcuts

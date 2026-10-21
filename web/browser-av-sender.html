@@ -1,0 +1,95 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; connect-src 'none'; media-src blob:; base-uri 'none'; form-action 'none'">
+<title>Free Agent private AV sender</title>
+<script>
+'use strict';
+(() => {
+  let pc = null, stream = null, establishTimer;
+  const stop = () => {
+    clearTimeout(establishTimer); establishTimer = null;
+    if (pc) { pc.onconnectionstatechange = null; pc.close(); pc = null; }
+    if (stream) { for (const track of stream.getTracks()) track.stop(); stream = null; }
+  };
+  window.avStop = stop;
+  async function switchTrack(kind, constraints) {
+    if (!pc || !stream || pc.connectionState !== 'connected') throw Error('Captura não conectada.');
+    const capture = await navigator.mediaDevices.getDisplayMedia(constraints);
+    const track = kind === 'video' ? capture.getVideoTracks()[0] : capture.getAudioTracks()[0];
+    if (!track) { capture.getTracks().forEach(t=>t.stop()); throw Error('Captura incompleta.'); }
+    try {
+      if (kind === 'video') track.contentHint = 'text';
+      const sender = pc.getSenders().find(s=>s.track?.kind === kind);
+      if (!sender) throw Error('Transmissor indisponível.');
+      await sender.replaceTrack(track);
+      for (const old of stream.getTracks().filter(t=>t.kind===kind)) { stream.removeTrack(old); old.stop(); }
+      stream.addTrack(track); sender.setStreams(stream);
+    } catch (error) { capture.getTracks().forEach(t=>t.stop()); throw error; }
+    for (const extra of capture.getTracks()) if (extra !== track) extra.stop();
+  }
+  window.avSwitchVideo = ({width,height,scale=1}) => switchTrack('video', {
+    video:{width:{ideal:Math.round(width*scale),max:Math.round(width*scale)},height:{ideal:Math.round(height*scale),max:Math.round(height*scale)},frameRate:{ideal:30,max:30}},audio:false
+  });
+  window.avSwitchAudio = () => switchTrack('audio', {video:true,audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
+  window.avResize = async ({ width, height, scale = 1 }) => {
+    width = Math.round(width * scale); height = Math.round(height * scale);
+    const track = stream?.getVideoTracks()[0];
+    if (track?.readyState === 'live') await track.applyConstraints({ width: { ideal: width, max: width }, height: { ideal: height, max: height }, frameRate: { ideal: 30, max: 30 } });
+  };
+  window.avAnswer = async ({ sdp, width, height, scale = 1 }) => {
+    width = Math.round(width * scale); height = Math.round(height * scale);
+    stop();
+    try {
+      const connection = pc = new RTCPeerConnection({ iceServers: [], bundlePolicy: 'max-bundle' });
+      await connection.setRemoteDescription({ type: 'offer', sdp });
+      stream = await navigator.mediaDevices.getDisplayMedia({
+        video: { width: { ideal: width, max: width }, height: { ideal: height, max: height }, frameRate: { ideal: 30, max: 30 } },
+        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+      });
+      if (stream.getAudioTracks().length !== 1 || stream.getVideoTracks().length !== 1) throw Error('Captura audiovisual incompleta.');
+      for (const track of stream.getTracks()) {
+        const transceiver = connection.getTransceivers().find(t => t.receiver.track.kind === track.kind);
+        if (!transceiver) throw Error('Oferta requer áudio e vídeo.');
+        transceiver.direction = 'sendonly';
+        await transceiver.sender.replaceTrack(track);
+        transceiver.sender.setStreams(stream);
+        if (track.kind === 'video') {
+          // The captured surface is a browser UI, not a webcam. Preserve text
+          // edges instead of asking adaptation to trade them for motion.
+          track.contentHint = 'text';
+          const codecs = RTCRtpSender.getCapabilities('video').codecs;
+          transceiver.setCodecPreferences([...codecs.filter(c => c.mimeType.toLowerCase() === 'video/vp8'), ...codecs.filter(c => c.mimeType.toLowerCase() !== 'video/vp8')]);
+        }
+      }
+      await connection.setLocalDescription(await connection.createAnswer());
+      for (const sender of connection.getSenders()) if (sender.track?.kind === 'video') {
+        const parameters = sender.getParameters();
+        parameters.encodings = parameters.encodings?.length ? parameters.encodings : [{}];
+        for (const encoding of parameters.encodings) { encoding.maxFramerate = 30; encoding.maxBitrate = Math.min(20000000, Math.max(4000000, width * height * 10)); }
+        parameters.degradationPreference = 'maintain-resolution';
+        await sender.setParameters(parameters);
+      }
+      if (connection.iceGatheringState !== 'complete') await new Promise((resolve, reject) => {
+        const timer = setTimeout(() => { connection.removeEventListener('icegatheringstatechange', check); reject(Error('Tempo limite ICE.')); }, 4000);
+        function check() { if (connection.iceGatheringState === 'complete') { clearTimeout(timer); connection.removeEventListener('icegatheringstatechange', check); resolve(); } }
+        connection.addEventListener('icegatheringstatechange', check); check();
+      });
+      establishTimer = setTimeout(() => { if (connection.connectionState !== 'connected') stop(); }, 10000);
+      connection.onconnectionstatechange = () => {
+        if (connection.connectionState === 'connected') { clearTimeout(establishTimer); establishTimer = null; }
+        if (['failed', 'closed', 'disconnected'].includes(connection.connectionState)) stop();
+      };
+      return connection.localDescription.toJSON();
+    } catch (error) { stop(); throw error; }
+  };
+  window.avStatus = () => ({ streaming: Boolean(stream && stream.getTracks().every(t => t.readyState === 'live') && pc && !['closed', 'failed', 'disconnected'].includes(pc.connectionState)), connectionState: pc?.connectionState || 'closed' });
+  window.avDiagnostics = async () => {
+    const result = { ...window.avStatus(), tracks: stream?.getTracks().map(t => ({ kind: t.kind, muted: t.muted, enabled: t.enabled, readyState: t.readyState, settings: t.getSettings() })) || [], audioEnergy: 0, audioSamples: 0 };
+    if (pc) (await pc.getStats()).forEach(s => {
+      if (s.type === 'media-source' && s.kind === 'audio') { result.audioEnergy += s.totalAudioEnergy || 0; result.audioSamples += s.totalSamplesDuration || 0; }
+      if (s.type === 'outbound-rtp' && s.kind === 'video') result.video = { width: s.frameWidth, height: s.frameHeight, framesEncoded: s.framesEncoded, encoder: s.encoderImplementation, encodeTime: s.totalEncodeTime, qualityLimitationReason: s.qualityLimitationReason };
+    });
+    return result;
+  };
+})();
+</script>

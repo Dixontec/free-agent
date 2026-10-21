@@ -10,8 +10,11 @@
 const { app, BrowserWindow, Menu, shell, dialog, nativeImage } = require('electron');
 const path = require('path');
 const { createStaticServer } = require('./server');
+const { createBrowserManager } = require('./browser-manager');
 
-const PORTA = 47811;              // fixa de propósito (origem estável p/ localStorage)
+const PORTA = Number(process.env.FA_APP_PORT || 47811); // stable production origin; configurable development port
+if (!Number.isInteger(PORTA) || PORTA < 1024 || PORTA > 65535) throw Error('FA_APP_PORT inválida.');
+if (process.env.FA_DEV_PROFILE) app.setPath('userData', path.resolve(process.env.FA_DEV_PROFILE));
 const RAIZ = path.join(__dirname, '..');
 const ORIGEM = `http://127.0.0.1:${PORTA}`;
 
@@ -20,7 +23,7 @@ let server = null;
 
 function sobeServidor() {
   return new Promise((resolve, reject) => {
-    server = createStaticServer(RAIZ);
+    server = createStaticServer(RAIZ, { liveReload: process.env.FA_DEV === '1' });
     server.once('error', reject);
     server.listen(PORTA, '127.0.0.1', () => resolve());
   });
@@ -42,10 +45,16 @@ function janela() {
       nodeIntegration: false,
       spellcheck: false,
       sandbox: true,
+      // A fullscreen WebContentsView covers this renderer. Keep its layout and
+      // IPC alive rather than treating native-child occlusion as a hidden app.
+      backgroundThrottling: false,
+      preload: path.join(__dirname, 'browser-preload.js'),
     },
   });
 
   Menu.setApplicationMenu(null); // sem menu → só "Free Agent" no topo
+  const browser = createBrowserManager(win, ORIGEM, app.getPath('userData'));
+  win.on('close', () => browser.dispose());
   win.once('ready-to-show', () => win.show());
   win.loadURL(`${ORIGEM}/index.html`);
 
@@ -55,7 +64,7 @@ function janela() {
     return { action: 'deny' };
   });
   win.webContents.on('will-navigate', (e, url) => {
-    if (!String(url).startsWith(ORIGEM)) {
+    if (new URL(url).origin !== ORIGEM) {
       e.preventDefault();
       if (/^https?:/i.test(url)) shell.openExternal(url);
     }
@@ -103,5 +112,7 @@ if (!trava) {
   });
 
   app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
-  app.on('before-quit', () => { if (server) { try { server.close(); } catch {} server = null; } });
+  app.on('before-quit', () => {
+    if (server) { try { server.close(); } catch {} server = null; }
+  });
 }

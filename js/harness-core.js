@@ -5,7 +5,7 @@
 import { buildToolsSection, parseToolCall } from './tools-registry.js';
 const PL = () => (typeof window !== 'undefined' && window.I18N && window.I18N.promptLang) ? window.I18N.promptLang() : 'pt-BR';
 import { buildBudget, summarizeOld } from './context-budget.js';
-import { verifyFinal } from './verifiers.js';
+import { verifyFinal, assertBrowserEvidence } from './verifiers.js';
 import { sandboxCheck, requestApproval } from './gate.js';
 import { trace } from './trace-store.js';
 
@@ -20,6 +20,14 @@ async function callWithTimeout(callLLM, msgs, opts = {}) {
       new Promise((_, rej) => c.signal.addEventListener('abort', () => rej(new Error('LLM timeout 25s')))),
     ]);
   } finally { clearTimeout(id); }
+}
+
+export async function runReAct(userText, deps) {
+  const browserEvidence = [];
+  const result = await runReActImpl(userText, deps, browserEvidence);
+  const check = assertBrowserEvidence(result.answer, { browserEvidence });
+  if (!check.ok) return { ...result, ok: false, pending: [...(result.pending || []), ...check.pending], answer: result.answer + '\n\n[Pendente: uma ação do navegador não teve efeito confirmado.]' };
+  return result;
 }
 
 function correctionPrompt(pending) {
@@ -77,7 +85,7 @@ function fallbackFromTools(userText, toolOutputs, toolsUsed) {
   return `Aqui está o que encontrei sobre "${String(userText || '').slice(0, 80)}":\n\n${body}${urls.length ? `\n\nFontes:\n${urls.map(u => `- ${u}`).join('\n')}` : ''}`;
 }
 
-export async function runReAct(userText, deps) {
+async function runReActImpl(userText, deps, browserEvidence) {
   const { history, cfg, callLLM, getSkills } = deps;
   const onStatus = deps.onStatus || (() => {});
   const t0 = Date.now();
@@ -137,6 +145,9 @@ export async function runReAct(userText, deps) {
     const s2 = performance.now();
     try {
       const res = await deps.execToolReal(tool.name, tool.arg);
+      if (tool.name.startsWith('browser_') && typeof res === 'string' && res.startsWith('[BROWSER_RESULT]')) {
+        try { const evidence = JSON.parse(res.slice('[BROWSER_RESULT]'.length)); browserEvidence.push({ tool: tool.name, verified: evidence.verified === true, performed: evidence.performed === true }); } catch { browserEvidence.push({ tool: tool.name, verified: false }); }
+      }
       toolOutputs.push(typeof res === 'string' ? res.slice(0, 6500) : JSON.stringify(res).slice(0, 6500));
       usedTool = true; toolsUsed.push(tool.name);
       trace({ kind: 'tool', step, tool: tool.name, ms: Math.round(performance.now() - s2), ok: true });
@@ -168,7 +179,7 @@ export async function runReAct(userText, deps) {
     if (!tool) {
       // ── VERIFICAÇÃO antes de entregar (com auto-fontes p/ não travar em loop) ──
       onStatus({ phase: 'verifying', step });
-      const ctx = { toolOutputs, usedTool, toolsUsed, userText };
+      const ctx = { toolOutputs, usedTool, toolsUsed, userText, browserEvidence };
       out = withAutoSources(out, ctx);
       const v = verifyFinal(out, ctx);
       if (v.ok) return { answer: out, ok: true, corrections, toolsUsed };

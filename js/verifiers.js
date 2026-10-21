@@ -80,7 +80,7 @@ export function assertTaskComplete(userText, answer, ctx) {
     pend.push({ check: 'nota-deletar', reason: 'pediu deletar nota mas delete_note não executou', fix: 'use delete_note com o trecho da nota antes de responder' });
   if (wants.listTasks && !used.has('list_tasks') && !/nenhuma tarefa|pendente\(s\)|tudo em dia/i.test(a))
     pend.push({ check: 'tarefa-ler', reason: 'perguntou de tarefas mas não leu a lista real', fix: 'use list_tasks e responda SÓ com os dados retornados' });
-  if (wants.open && !used.has('open_site'))
+  if (wants.open && !used.has('open_site') && !used.has('browser_navigate'))
     pend.push({ check: 'tarefa-abrir', reason: 'pediu abrir mas open_site não executou', fix: 'execute open_site e só então confirme' });
   if (wants.news && !used.has('web_search') && !used.has('news') && ctx.usedTool && !/https?:\/\//.test(a))
     pend.push({ check: 'tarefa-noticia', reason: 'pediu notícias mas sem dados verificados', fix: 'busque antes de resumir' });
@@ -112,10 +112,19 @@ export function assertNoRawTool(answer) {
 export function verifyFinal(answer, ctx) {
   const all = [];
   for (const c of [
+    assertBrowserEvidence(answer, ctx),
     assertNoRawTool(answer),
     assertNoHallucinatedURL(answer, ctx.toolOutputs || [], ctx.toolsUsed || []),
     assertSources(answer, ctx.toolOutputs || [], ctx.toolsUsed || []),
     assertTaskComplete(ctx.userText || '', answer, ctx),
   ]) if (!c.ok) all.push(...c.pending);
   return all.length ? { ok: false, pending: all } : { ok: true, pending: [] };
+}
+
+export function assertBrowserEvidence(answer, ctx) {
+  const evidence = ctx.browserEvidence || [];
+  const failed = evidence.some(e => e.tool === 'browser_action' && !e.verified);
+  if (failed && !/n[aã]o.*(confirm|verific|conclu)|sem confirma|pendente|efeito.*n[aã]o/i.test(String(answer)))
+    return { ok: false, pending: [{ check: 'browser-effect', reason: 'ação do navegador sem efeito confirmado', fix: 'informe a limitação; não declare a ação concluída' }] };
+  return { ok: true, pending: [] };
 }

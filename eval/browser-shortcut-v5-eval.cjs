@@ -1,0 +1,21 @@
+'use strict';
+const {app,BrowserWindow,session}=require('electron'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path');
+const {createBrowserControls}=require('../desktop/browser-controls');
+const {createBrowserFullscreen}=require('../desktop/browser-fullscreen');
+const dir=fs.mkdtempSync(path.join(os.tmpdir(),'fa-shortcut-v5-'));app.setPath('userData',dir);
+const wait=ms=>new Promise(r=>setTimeout(r,ms));let w,c,full;
+app.whenReady().then(async()=>{
+ const s=session.fromPartition('persist:shortcut');
+ w=new BrowserWindow({show:true,width:800,height:600,webPreferences:{session:s,sandbox:true,contextIsolation:true,nodeIntegration:false,disableHtmlFullscreenWindowResize:true}});
+ const wc=w.webContents;
+ c=createBrowserControls({session:s,dataDirectory:dir,getTabs:()=>[wc],getActive:()=>wc,changed:()=>{}});c.track(wc);await c.ready;
+ full=createBrowserFullscreen(w,()=>{},()=>wc);full.track(wc);
+ s.protocol.handle('https',()=>new Response('<!doctype html><title>Shortcut V5</title><video style="width:600px;height:400px;background:#234" controls></video><input id="text">',{headers:{'content-type':'text/html'}}));
+ await wc.loadURL('https://fixture.test/');w.show();w.focus();
+ await wc.executeJavaScript("document.dispatchEvent(new KeyboardEvent('keydown',{key:'f',bubbles:true,cancelable:true}))",true);await wait(300);
+ assert.equal(full.state().active,true,'F handler enters fullscreen');assert.equal(w.isFullScreen(),true);
+ await full.exit();await wait(200);
+ await wc.executeJavaScript("document.querySelector('input').focus();document.querySelector('input').dispatchEvent(new KeyboardEvent('keydown',{key:'f',bubbles:true,cancelable:true}))",true);await wait(100);assert.equal(full.state().active,false,'typing F does not fullscreen');
+ await wc.executeJavaScript("document.activeElement.blur();document.addEventListener('keydown',e=>{if(e.key==='f')e.preventDefault()},{once:true});document.dispatchEvent(new KeyboardEvent('keydown',{key:'f',bubbles:true,cancelable:true}))",true);await wait(100);assert.equal(full.state().active,false,'site F handler is respected');
+ console.log('VERIFIED: F fallback on real Chromium document, fullscreen window, editable exclusion and site handler precedence. Synthetic key event with Electron user gesture; not a physical keyboard test.');
+}).catch(e=>{console.error(e.stack);process.exitCode=1}).finally(async()=>{if(w&&!w.isDestroyed())await w.webContents.executeJavaScript('document.fullscreenElement ? document.exitFullscreen() : undefined').catch(()=>{});full?.dispose();c?.dispose();app.exit(process.exitCode||0)});

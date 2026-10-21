@@ -70,12 +70,33 @@ window.runBrowserEval = async function () {
     } catch (err) { ok(c.id, false, 'exceção: ' + err.message); }
   }
 
+  // ── G. fundo Matrix (seletor + engine + ciclo de vida) ──
+  try {
+    const sel = $('#bgSelect');
+    ok('bg:opcao matrix', !!sel && [...sel.options].some(o => o.value === 'matrix'));
+    sel.value = 'matrix'; sel.dispatchEvent(new Event('change'));
+    ok('bg:matrix visivel', $('#bgMatrix').style.display === 'block', $('#bgMatrix').style.display);
+    ok('bg:matrix salvo', store.get('bg', {}).mode === 'matrix');
+    const shouldRun = !document.hidden && !matchMedia('(prefers-reduced-motion: reduce)').matches;
+    ok('bg:matrix engine ativa', !!window.__matrixBg && window.__matrixBg.active && window.__matrixBg.running === shouldRun);
+    ok('bg:3d desligado', $('#bg3d').style.display === 'none' && window.__bg3dEnabled === false);
+    sel.value = 'matrix-center'; sel.dispatchEvent(new Event('change'));
+    ok('bg:matrix central salvo', store.get('bg', {}).mode === 'matrix-center');
+    ok('bg:matrix central recortado', $('#bgMatrix').style.clipPath.startsWith('inset(') && !!window.__matrixBg.active);
+    sel.value = 'matrix'; sel.dispatchEvent(new Event('change'));
+    ok('bg:matrix tela inteira', $('#bgMatrix').style.clipPath === '');
+    sel.value = 'preset'; sel.dispatchEvent(new Event('change'));
+    ok('bg:matrix parado', $('#bgMatrix').style.display === 'none' && !!window.__matrixBg && window.__matrixBg.running === false);
+    ok('bg:preset volta', window.__bg3dEnabled === false && $('#bgCustom').style.display === 'block');
+  } catch (err) { ok('bg:matrix', false, 'exceção: ' + err.message); }
+
   // ── restore total ──
   try { document.querySelector('#musicAudio')?.pause(); } catch {}
   const testLocalIds = LocalMusic.list().map(t => t.id).filter(id => !localIdsBefore.has(id));
   for (const id of testLocalIds) await LocalMusic.remove(id).catch(() => {});
   localStorage.clear();
   for (const [k, v] of Object.entries(lsSnap)) localStorage.setItem(k, v);
+  applyBackground(); // restaura também a camada visível, mesmo sem nexus:bg original
   MusicPlayer.queue.length = 0;
   for (const t of qbak) MusicPlayer.queue.push(t);
   loadConv(activeConv);

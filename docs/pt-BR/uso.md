@@ -34,7 +34,7 @@
 ## Núcleo, temas e fundo
 
 - **Núcleo** (botão órbita): HUD com atividade em tempo real, máx. 6 janelas.
-- **Temas**: Light · Dark · Glass. **Fundo**: Núcleo 3D + Aurora, só 3D, só Aurora, imagem própria ou liso. Intensidade e blur ajustáveis; `window.__bg3dEnabled=false` desliga o 3D sem afetar o loop.
+- **Temas**: Light · Dark · Glass. **Fundo**: Núcleo 3D + Aurora, só 3D, só Aurora, Matrix (chuva digital), imagem própria ou liso. Intensidade e blur ajustáveis; `window.__bg3dEnabled=false` desliga o 3D sem afetar o loop.
 - **Descanso**: tela de relógio após N minutos parado (ESPAÇO desperta).
 
 ## Atalhos mentais
