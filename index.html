@@ -10,6 +10,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&family=Space+Grotesk:wght@500;600;700&family=Unbounded:wght@600;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css" />
+<link rel="stylesheet" href="browser-drawer.css" />
 <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 <script type="importmap">
 { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
@@ -17,6 +18,7 @@
 </head>
 <body>
 <canvas id="bg3d"></canvas>
+<canvas id="bgMatrix" aria-hidden="true"></canvas>
 <div id="aurora" aria-hidden="true"><span class="blob b1"></span><span class="blob b2"></span><span class="blob b3"></span></div>
 <div id="bgCustom" aria-hidden="true"></div>
 <video id="bgVideo" muted loop playsinline preload="auto" aria-hidden="true"></video>
@@ -29,6 +31,7 @@
     </button>
     <div class="top-center"></div>
     <div class="top-right">
+      <button id="btnBrowser" class="btn ghost icon-only" title="Navegador" aria-label="Abrir navegador" aria-controls="browserDrawer" aria-expanded="false"><i data-lucide="globe"></i></button>
       <div id="connStatus" class="conn"><i data-lucide="wifi"></i><span class="dot"></span><span id="connLabel" data-i18n="nav.disconnected">desconectado</span></div>
       <div class="upd-wrap">
         <button id="btnUpdate" class="btn ghost icon-only" title="Atualizações"><i data-lucide="bell"></i><span id="updDot" class="upd-dot" hidden></span></button>
@@ -534,6 +537,8 @@
             <option value="combo">Núcleo 3D + Aurora</option>
             <option value="3d" data-i18n="set.bgOpt2">Só Núcleo 3D</option>
             <option value="aurora" data-i18n="set.bgOpt3">Só Aurora</option>
+            <option value="matrix" data-i18n="set.bgOpt6">Matrix — Chuva Digital</option>
+            <option value="matrix-center" data-i18n="set.bgMatrixCenter">Matrix — Só no painel central</option>
             <option value="preset" data-i18n="set.bgPreset">Galeria</option>
             <option value="custom" data-i18n="set.bgOpt4">Imagem personalizada</option>
             <option value="none" data-i18n="set.bgOpt5">Nenhum (liso)</option>
@@ -557,7 +562,7 @@
             <option value="10" data-i18n="set.rest10">Após 10 min parado</option>
           </select>
         </label>
-        <div class="fld"><span><span data-i18n="set.fx">Intensidade 3D</span> <b id="fxVal">70%</b></span>
+        <div class="fld"><span><span data-i18n="set.fx" id="fxLabel">Intensidade 3D</span> <b id="fxVal">70%</b></span>
           <input id="fxIntensity" type="range" min="0" max="100" value="70" />
         </div>
         <div class="btnrow">
@@ -742,10 +747,60 @@
   </form>
 </div>
 
+<aside id="browserDrawer" aria-label="Navegador" aria-hidden="true" inert>
+  <div id="browserResize" role="separator" aria-label="Largura do navegador" aria-orientation="vertical" tabindex="0"></div>
+  <div class="browser-heading">
+    <strong>Navegador</strong>
+    <button type="button" id="browserChat" title="Mostrar conversa" aria-label="Mostrar conversa">Conversa</button>
+    <button type="button" id="browserSelection" title="Enviar texto selecionado à conversa">Citar seleção</button>
+    <button type="button" id="browserSettingsButton" title="Permissões, extensões e bloqueio" aria-label="Configurações do navegador">⚙</button>
+    <button type="button" id="browserCreate" title="Nova aba" aria-label="Nova aba">+</button>
+    <button type="button" id="browserFullscreen" title="Tela cheia (F11); Esc para sair" aria-pressed="false">Tela cheia</button>
+    <button type="button" id="browserExpand" title="Expandir" aria-label="Expandir" aria-pressed="false">⛶</button>
+    <button type="button" id="browserCollapse" title="Recolher (Esc)" aria-label="Recolher navegador">×</button>
+  </div>
+  <div id="browserTabs" role="tablist" aria-label="Abas do navegador"></div>
+  <form id="browserNavigation" class="browser-navigation">
+    <button type="button" id="browserBack" title="Voltar" aria-label="Voltar">←</button>
+    <button type="button" id="browserForward" title="Avançar" aria-label="Avançar">→</button>
+    <button type="button" id="browserReload" title="Recarregar" aria-label="Recarregar">↻</button>
+    <button type="button" id="browserStop" title="Parar" aria-label="Parar carregamento">■</button>
+    <input id="browserAddress" aria-label="URL ou pesquisa no Google" placeholder="URL ou pesquisa no Google" autocomplete="off" spellcheck="false" />
+    <button type="submit" title="Navegar">Ir</button>
+    <button type="button" id="browserExternal" title="Abrir no navegador externo" aria-label="Abrir no navegador externo">↗</button>
+  </form>
+  <details id="browserDiagnostics"><summary>Diagnóstico</summary><div class="browser-service-status">
+    <p id="browserDiagnostic" role="status"></p>
+    <button type="button" id="browserRetry" hidden>Tentar novamente</button>
+  </div>
+  </details>
+  <p id="browserMediaNotice" hidden>Áudio da aba ativa; reprodução protegida depende do site</p>
+  <div id="browserMediaControls" hidden>
+    <button id="browserAudio" type="button" aria-pressed="false">Ativar áudio</button>
+    <button id="browserMediaRetry" type="button">Reconectar mídia</button>
+  </div>
+  <p id="browserError" role="status" hidden></p>
+  <div id="browserViewport">
+    <div id="browserFallback" hidden>
+      <h3>Serviço de navegador indisponível</h3>
+      <p>Inicie npm run server OU python serve.py, acesse a interface por uma origem autorizada e use Tentar novamente para navegar aqui.</p>
+      <p>Como alternativa explícita, o link abaixo abre no navegador externo.</p>
+      <a id="browserFallbackLink" href="https://www.google.com/" target="_blank" rel="noopener noreferrer">Abrir Google externamente</a>
+    </div>
+    <section id="browserEmpty" class="browser-home"><h2>Nova aba</h2><p>Pesquise na barra de endereço ou abra um atalho.</p><div id="browserShortcuts"></div></section>
+  </div>
+  <section id="browserDownloads" aria-label="Downloads" hidden></section>
+</aside>
+
+<script src="js/browser-navigation.js"></script>
+<script src="js/browser-workspace.js"></script>
+<script src="js/browser-adapter.js"></script>
+<script src="js/browser-drawer.js"></script>
 <script src="js/skills.js"></script>
 <script src="js/music-repos.js"></script>
 <script src="js/local-music.js"></script>
 <script src="js/music-player.js"></script>
+<script src="js/matrix-bg.js"></script>
 <script type="module" src="js/three-bg.js"></script>
 <script type="module" src="js/neural.js"></script>
 <script type="module" src="js/v2-bridge.js"></script>

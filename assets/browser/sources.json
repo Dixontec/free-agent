@@ -1,0 +1,16 @@
+[
+  {
+    "name": "easylist.txt",
+    "url": "https://easylist.to/easylist/easylist.txt",
+    "bytes": 2210055,
+    "sha256": "473d21b5140f31bc49fd5db1ba0273a85cb45da0e36b0c9ee1cc317d64daeac4",
+    "fetchedAt": "2026-10-21T00:34:09.780Z"
+  },
+  {
+    "name": "easyprivacy.txt",
+    "url": "https://easylist.to/easylist/easyprivacy.txt",
+    "bytes": 1510529,
+    "sha256": "18ff5daa0ba6dc16804558fa76a8782ba0726a14049fcab0958349f77b7bff95",
+    "fetchedAt": "2026-10-21T00:34:10.025Z"
+  }
+]

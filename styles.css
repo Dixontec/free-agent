@@ -37,6 +37,12 @@ html[data-theme="glass"] body{background:#070814}
 #bg3d{position:fixed;inset:0;width:100%;height:100%;z-index:0;display:block}
 html[data-theme="light"] #bg3d{opacity:.5}
 html[data-theme="dark"] #bg3d{opacity:.8}
+/* Chuva frontal: somente glifos, sem véu preto sobre o aplicativo. */
+#bgMatrix{position:fixed;inset:0;width:100%;height:100%;z-index:2;display:none;pointer-events:none;opacity:.52;transition:opacity .2s ease}
+html[data-theme="light"] #bgMatrix{opacity:.34}
+html:has(#composer:focus-within) #bgMatrix{opacity:.30}
+html[data-matrix-active="true"] body::before{content:"";position:fixed;inset:0;background:#000;z-index:0;pointer-events:none}
+@media(prefers-reduced-motion:reduce){#bgMatrix{transition:none}}
 #aurora{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
 html[data-theme="light"] #aurora{display:none}
 .blob{position:absolute;border-radius:50%;filter:blur(90px);opacity:.5;animation:drift 18s ease-in-out infinite alternate}

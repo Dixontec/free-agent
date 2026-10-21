@@ -70,9 +70,10 @@ document.getElementById('fxIntensity')?.addEventListener('input', e => intensity
 document.getElementById('btnFxToggle')?.addEventListener('click', e => {
   running = !running;
   const btn = e.currentTarget;
+  const t = (k, fb) => (window.I18N && window.I18N.t) ? window.I18N.t(k) : fb;
   btn.innerHTML = running
-    ? '<i data-lucide="pause"></i>Pausar fundo'
-    : '<i data-lucide="play"></i>Retomar fundo';
+    ? '<i data-lucide="pause"></i><span data-i18n="set.pauseBg">' + t('set.pauseBg', 'Pausar fundo') + '</span>'
+    : '<i data-lucide="play"></i><span data-i18n="set.resumeBg">' + t('set.resumeBg', 'Retomar fundo') + '</span>';
   try { if (window.lucide) lucide.createIcons(); } catch {}
 });
 

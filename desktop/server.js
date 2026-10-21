@@ -44,13 +44,18 @@ function send(res, code, body, type) {
 }
 
 /** Cria (mas não inicia) o servidor que serve `root`. */
-function createStaticServer(root) {
+function createStaticServer(root, options = {}) {
   const ROOT = path.resolve(root);
-
-  return http.createServer((req, res) => {
+  const liveClients = new Set();
+  const server = http.createServer((req, res) => {
     try {
       const u = new URL(req.url, 'http://127.0.0.1');
       let p = decodeURIComponent(u.pathname);
+      if (p === '/browser-config.json') return send(res, 200, JSON.stringify({ browserPort: options.browserPort || 47812 }), 'application/json');      if (options.liveReload && p === '/__dev_events') {
+        res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', 'Connection': 'keep-alive' });
+        res.write(': development reload\n\n'); liveClients.add(res);
+        req.on('close', () => liveClients.delete(res)); return;
+      }
 
       if (p === '/health') {
         return send(res, 200, JSON.stringify({ ok: true, app: 'free-agent', root: ROOT }), 'application/json');
@@ -66,6 +71,13 @@ function createStaticServer(root) {
 
       fs.stat(fsPath, (err, st) => {
         if (err || !st.isFile()) return send(res, 404, 'nao encontrado');
+        if (options.liveReload && path.extname(fsPath) === '.html') {
+          return fs.readFile(fsPath, 'utf8', (err, html) => {
+            if (err) return send(res, 500, 'erro interno');
+            const reload = `<script>(()=>{let opened=false;const events=new EventSource('/__dev_events');events.onopen=()=>{if(opened)location.reload();opened=true};events.onmessage=()=>location.reload()})()</script>`;
+            send(res, 200, html.replace('</body>', reload + '</body>'), 'text/html; charset=utf-8');
+          });
+        }
         const type = MIME[path.extname(fsPath).toLowerCase()] || 'application/octet-stream';
         res.writeHead(200, { 'Content-Type': type, 'Content-Length': st.size, 'Cache-Control': 'no-cache' });
         const rs = fs.createReadStream(fsPath);
@@ -76,6 +88,15 @@ function createStaticServer(root) {
       send(res, 500, 'erro interno');
     }
   });
+  if (options.liveReload) {
+    let timer;
+    const watchers = [ROOT, path.join(ROOT, 'js')].map(directory => fs.watch(directory, (_event, file) => {
+      if (!file || !/\.(html|css|js|mjs)$/.test(String(file))) return;
+      clearTimeout(timer); timer = setTimeout(() => { for (const client of liveClients) client.write('data: reload\n\n'); }, 180);
+    }));
+    server.on('close', () => { clearTimeout(timer); for (const watcher of watchers) watcher.close(); for (const client of liveClients) client.end(); liveClients.clear(); });
+  }
+  return server;
 }
 
 module.exports = { createStaticServer, MIME };

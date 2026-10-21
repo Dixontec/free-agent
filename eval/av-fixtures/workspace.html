@@ -1,0 +1,8 @@
+<!doctype html><meta charset="utf-8"><title>Browser workspace fixture</title>
+<style>body{font:16px Arial;background:#fff;color:#171717;padding:24px}button,input{font:inherit;padding:10px;margin:8px}#quote{max-width:500px;line-height:1.6}#far{margin-top:1400px}</style>
+<h1>Texto nítido em todas as escalas</h1>
+<p id="quote">Uma página real permite observar, selecionar e conferir o resultado de cada ação.</p>
+<label>Nome <input id="name" aria-label="Nome"></label><button id="send">Confirmar</button>
+<p id="result" role="status"></p><button id="noop">Sem efeito</button>
+<p id="far">Final da página</p>
+<script>document.querySelector('#send').onclick=()=>{document.querySelector('#result').textContent='Confirmado: '+document.querySelector('#name').value;document.title='Formulário confirmado'};</script>

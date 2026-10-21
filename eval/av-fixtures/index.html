@@ -1,0 +1,30 @@
+<!doctype html><meta charset="utf-8"><title>AV demo ready</title>
+<style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#132b46;color:white;font:14px sans-serif}video{position:absolute;inset:0;width:100%;height:100%;object-fit:fill}header{position:absolute;z-index:2;top:0;left:0;right:0;height:66px;background:#132b46e8;display:flex;align-items:center;gap:8px;padding:0 12px}button,input{height:34px;box-sizing:border-box}input{width:145px}canvas{display:none}#result{position:absolute;bottom:5px;left:8px;z-index:2}</style>
+<video id="player" controls playsinline loop></video><canvas id="scene" width="640" height="360"></canvas>
+<header><button id="play">Play demo</button><input id="text" placeholder="Texto" oninput="document.title='typed:'+this.value"><button id="sw">Worker</button><a id="download" href="/file.txt?download=1" download="demo.txt" style="color:white">Download</a><a href="/second.html" target="_blank" style="color:white">Aba</a></header><div id="result"></div>
+<script>
+'use strict';
+const ctx=scene.getContext('2d');
+play.onclick=async()=>{
+  play.disabled=true;document.title='Generating demo';
+  try{
+    const ac=new AudioContext();await ac.resume();
+    const dest=ac.createMediaStreamDestination(),osc=ac.createOscillator(),gain=ac.createGain();
+    osc.frequency.value=660;osc.connect(gain).connect(dest);gain.gain.value=0;osc.start();
+    const start=ac.currentTime;
+    for(let n=0;n<12;n++){const t=start+n*.5;gain.gain.setValueAtTime(.04,t);gain.gain.setValueAtTime(0,t+.15)}
+    let live=true;
+    function draw(){if(!live)return;const t=ac.currentTime-start;ctx.fillStyle='#123c63';ctx.fillRect(0,0,640,360);ctx.fillStyle='orange';ctx.fillRect((t*180)%600,90,40,80);ctx.fillStyle=t%.5<.15?'white':'black';ctx.fillRect(280,170,80,80);ctx.fillStyle='white';ctx.font='20px sans-serif';ctx.fillText('Free Agent AV '+t.toFixed(2),20,320);requestAnimationFrame(draw)}draw();
+    const stream=scene.captureStream(30);dest.stream.getAudioTracks().forEach(t=>stream.addTrack(t));
+    const chunks=[],rec=new MediaRecorder(stream,{mimeType:'video/webm;codecs=vp8,opus',videoBitsPerSecond:1500000});
+    rec.ondataavailable=e=>{if(e.data.size)chunks.push(e.data)};
+    const stopped=new Promise(resolve=>rec.onstop=resolve);rec.start(200);
+    await new Promise(resolve=>setTimeout(resolve,2100));rec.stop();await stopped;live=false;
+    stream.getTracks().forEach(t=>t.stop());osc.stop();await ac.close();
+    player.src=URL.createObjectURL(new Blob(chunks,{type:'video/webm'}));player.volume=.65;
+    await player.play();document.title='AV demo playing';result.textContent='VP8 + Opus; source is this tab only';
+  }catch(e){document.title='AV demo error: '+e.name;result.textContent=e.message;play.disabled=false}
+};
+sw.onclick=async()=>{try{await navigator.serviceWorker.register('/sw.js');await navigator.serviceWorker.ready;if(!navigator.serviceWorker.controller)await new Promise(r=>navigator.serviceWorker.addEventListener('controllerchange',r,{once:true}));document.title='SW ready';result.textContent='Service Worker ready';const probe=new URL(location.href).searchParams.get('probe');if(probe)navigator.serviceWorker.controller.postMessage({probe})}catch(e){document.title='SW error: '+e.name}};
+navigator.serviceWorker.addEventListener('message',e=>{if(e.data==='private-blocked')document.title='SW private blocked';else if(e.data==='private-reached')document.title='SW UNSAFE'});
+</script>
