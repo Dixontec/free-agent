@@ -101,7 +101,7 @@ export async function runReAct(userText, deps) {
   //  · web_open   → gatilho amplo (página que o usuário indicou/colou).
   const SEARCH_RE = /pesquis|busc|not[ií]cias?|procure|procurar|google|bing|duckduckgo|wiki|pre[çc]os?|clima|cota[çc]|ultim[oa]s?|atualiza|manchete|apuro|curiosidad|defini[çc]|significad|hist[óo]ria d[ao]|compar|versus|\bvs\b/i;
   const needsSearchFor = () => SEARCH_RE.test(String(userText || ''));
-  const NEEDS_RE = /not[ií]cia|\bnota|pesquis|busc|atual|hoje|recente|2024|2025|2026|abrir|acess|ver\s+site|youtube|v[ií]deo|tarefa|pendente|toca|toque|play|m[uú]sica|baixar|download|skill|rotina|pre[çc]o|clima|dado|fonte|link/i;
+  const NEEDS_RE = /not[ií]cia|\bnota|pesquis|busc|atual|hoje|recente|2024|2025|2026|abrir|acess|ver\s+site|youtube|v[ií]deo|tarefa|pendente|toca|toque|play|m[uú]sica|baixar|download|skill|rotina|pre[çc]o|clima|dado|fonte|link|navegador|browser|clic|digit|scroll|inspecion|screenshot|tela/i;
   const needsToolFor = (t) => NEEDS_RE.test(String(userText || '')) || toolOutputs.length > 0;
   async function runToolCall(tool, step) {
     if (tool.name === 'web_search' && !needsSearchFor()) {

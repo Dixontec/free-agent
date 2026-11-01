@@ -14,7 +14,7 @@ const ASSET_HOSTS = new Set([
 ]);
 export function assertNoHallucinatedURL(answer, toolOutputs, toolsUsed = []) {
   // Código gerado referencia assets externos por design — não há o que verificar.
-  if ((toolsUsed || []).some(x => ['code_write', 'code_edit'].includes(String(x).toLowerCase()))) return { ok: true, pending: [] };
+  if ((toolsUsed || []).some(x => ['code_write', 'code_edit', 'browser_open', 'browser_inspect', 'browser_click', 'browser_type', 'browser_screenshot', 'browser_scroll'].includes(String(x).toLowerCase()))) return { ok: true, pending: [] };
   const urls = [...String(answer).matchAll(/https?:\/\/[^\s<")]+/g)].map(m => m[0]);
   const corpus = (toolOutputs || []).join('\n');
   const bad = urls.filter(u => {
@@ -56,6 +56,8 @@ export function assertTaskComplete(userText, answer, ctx) {
     editNote: /nota/i.test(t) && /(edit|atualiz|mudar|alter)/i.test(t),
     deleteNote: /nota/i.test(t) && /(delet|apag|remov|exclu)/i.test(t),
     listTasks: /tem.+tarefa|tenho.+tarefa|alguma tarefa|tarefa pendente|o que.*pendente|lista.*tarefa|mostra.*tarefa/i.test(t),
+    browserInspect: /inspecion|elementos.*(p[áa]gina|tela|navegador|browser)/i.test(t),
+    browserScreenshot: /screenshot|print|captur.*(tela|p[áa]gina|navegador|browser)/i.test(t),
   };
   const used = new Set((ctx.toolsUsed || []).map(x => String(x).toLowerCase()));
   // REGRA ESTRITA: alegar que executou sem a tool ter rodado = pendência.
@@ -80,8 +82,12 @@ export function assertTaskComplete(userText, answer, ctx) {
     pend.push({ check: 'nota-deletar', reason: 'pediu deletar nota mas delete_note não executou', fix: 'use delete_note com o trecho da nota antes de responder' });
   if (wants.listTasks && !used.has('list_tasks') && !/nenhuma tarefa|pendente\(s\)|tudo em dia/i.test(a))
     pend.push({ check: 'tarefa-ler', reason: 'perguntou de tarefas mas não leu a lista real', fix: 'use list_tasks e responda SÓ com os dados retornados' });
-  if (wants.open && !used.has('open_site'))
-    pend.push({ check: 'tarefa-abrir', reason: 'pediu abrir mas open_site não executou', fix: 'execute open_site e só então confirme' });
+  if (wants.open && !used.has('open_site') && !used.has('browser_open'))
+    pend.push({ check: 'tarefa-abrir', reason: 'pediu abrir mas nem open_site nem browser_open executou', fix: 'execute browser_open ou open_site e só então confirme' });
+  if (wants.browserInspect && !used.has('browser_inspect'))
+    pend.push({ check: 'browser-inspecionar', reason: 'pediu inspecionar mas browser_inspect não executou', fix: 'use browser_inspect para escanear a página antes de responder' });
+  if (wants.browserScreenshot && !used.has('browser_screenshot'))
+    pend.push({ check: 'browser-screenshot', reason: 'pediu screenshot mas browser_screenshot não executou', fix: 'use browser_screenshot para capturar a tela antes de responder' });
   if (wants.news && !used.has('web_search') && !used.has('news') && ctx.usedTool && !/https?:\/\//.test(a))
     pend.push({ check: 'tarefa-noticia', reason: 'pediu notícias mas sem dados verificados', fix: 'busque antes de resumir' });
   return pend.length ? { ok: false, pending: pend } : { ok: true, pending: [] };

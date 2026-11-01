@@ -150,6 +150,42 @@ export const TOOLS = {
     needsApproval: false,
     renderHint: () => `<tool name="save_correction">resumo da correção em 1 linha</tool>`,
   },
+  browser_open: {
+    desc: 'Abrir URL no navegador embutido persistente. Use quando pedir abrir site no navegador ou navegar.',
+    schema: { type: 'object', properties: { url: { type: 'string' } }, required: ['url'] },
+    needsApproval: false,
+    renderHint: () => `<tool name="browser_open">https://...</tool>`,
+  },
+  browser_inspect: {
+    desc: 'Computer Use: Inspecionar página no navegador embutido. Retorna lista [#1, #2...] de botões, links e campos interativos.',
+    schema: { type: 'object', properties: { selector: { type: 'string' } } },
+    needsApproval: false,
+    renderHint: () => `<tool name="browser_inspect"></tool>`,
+  },
+  browser_click: {
+    desc: 'Computer Use: Clicar em elemento do navegador por [#número], seletor ou texto. Mostra pulso visual.',
+    schema: { type: 'object', properties: { target: { type: 'string' } }, required: ['target'] },
+    needsApproval: false,
+    renderHint: () => `<tool name="browser_click">#1</tool>`,
+  },
+  browser_type: {
+    desc: 'Computer Use: Digitar texto em campo do formulário no navegador.',
+    schema: { type: 'object', properties: { target: { type: 'string' }, text: { type: 'string' }, enter: { type: 'boolean' } }, required: ['text'] },
+    needsApproval: false,
+    renderHint: () => `<tool name="browser_type">{"target":"#1","text":"termo","enter":true}</tool>`,
+  },
+  browser_screenshot: {
+    desc: 'Computer Use: Capturar tela (screenshot) do navegador embutido e exibir no monitor do agente.',
+    schema: { type: 'object', properties: {} },
+    needsApproval: false,
+    renderHint: () => `<tool name="browser_screenshot"></tool>`,
+  },
+  browser_scroll: {
+    desc: 'Computer Use: Rolar página do navegador para cima ou para baixo.',
+    schema: { type: 'object', properties: { direction: { type: 'string' }, amount: { type: 'number' } }, required: ['direction'] },
+    needsApproval: false,
+    renderHint: () => `<tool name="browser_scroll">{"direction":"down","amount":500}</tool>`,
+  },
 };
 
 // System enxuto: nomes + 1 linha cada + slugs (sem prompts das skills)
@@ -172,6 +208,12 @@ export function buildToolsSection(activeSlugs) {
     `- list_convs: listar conversas salvas.`,
     `- read_conv({"match"}): ler mensagens de uma conversa (trecho do título ou id).`,
     `- save_correction(texto): salvar correção/preferência do usuário na Memória do Agente.`,
+    `- browser_open(url): abrir página no navegador embutido persistente.`,
+    `- browser_inspect: Computer Use — inspecionar elementos interativos [#1, #2, ...] da página atual.`,
+    `- browser_click(target): Computer Use — clicar em elemento por [#número], seletor ou texto.`,
+    `- browser_type({"target","text",enter}): Computer Use — digitar em campo de formulário.`,
+    `- browser_screenshot: Computer Use — tirar screenshot da página e exibir no monitor.`,
+    `- browser_scroll({"direction","amount"}): Computer Use — rolar página (down/up).`,
     `- code_read({"path"}): ler arquivo do projeto.`,
     `- code_list({"path"}): listar pasta.`,
     `- code_glob({"pattern"}): achar arquivos.`,
@@ -185,11 +227,11 @@ export function buildToolsSection(activeSlugs) {
 
 export function parseToolCall(text) {
   const s = String(text || '');
-  const m = s.match(/<tool\s+name=["'](web_search|web_open|open_site|run_skill|music_search|music_download|music_play|create_task|list_tasks|complete_task|delete_task|create_note|list_notes|edit_note|delete_note|list_convs|read_conv|save_correction|news|code_read|code_list|code_glob|code_grep|code_write|code_edit|code_bash)["']\s*>([\s\S]*?)<\/tool>/i);
+  const m = s.match(/<tool\s+name=["'](web_search|web_open|open_site|run_skill|music_search|music_download|music_play|create_task|list_tasks|complete_task|delete_task|create_note|list_notes|edit_note|delete_note|list_convs|read_conv|save_correction|browser_open|browser_inspect|browser_click|browser_type|browser_screenshot|browser_scroll|news|code_read|code_list|code_glob|code_grep|code_write|code_edit|code_bash)["']\s*>([\s\S]*?)<\/tool>/i);
   if (m) {
     let name = m[1].toLowerCase();
     if (name === 'news') name = 'web_search'; // compat legado
-    const cap = name.startsWith('code_') ? 20000 : 500;
+    const cap = (name.startsWith('code_') || name.startsWith('browser_')) ? 20000 : 500;
     return { name, arg: m[2].trim().slice(0, cap) };
   }
   // Fallback: modelo emitiu tool nativa JSON em vez de <tool> (causa do Groq 400 tool_use_failed)

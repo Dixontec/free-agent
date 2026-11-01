@@ -186,7 +186,7 @@
         <button data-tab="log"><i data-lucide="terminal"></i><span data-i18n="tab.log">Log</span></button>
         <button data-tab="notes"><i data-lucide="sticky-note"></i><span data-i18n="tab.notes">Notas</span></button>
         <button data-tab="extra1" title="Telegram"><i data-lucide="send"></i></button>
-        <button data-tab="extra2"><i data-lucide="zap"></i></button>
+        <button data-tab="browser" title="Navegador (Computer Use)"><i data-lucide="globe"></i></button>
       </nav>
 
       <div class="tabpage" id="tab-routines">
@@ -375,7 +375,50 @@
 
         <p class="hint" style="margin-top:14px"><i data-lucide="shield-check"></i> <span data-i18n="tg.privacy">Privacidade: o token vive no localStorage do seu navegador. A conexão é direta do seu navegador para o api.telegram.org — sem intermediário nosso.</span></p>
       </div>
-      <div class="tabpage" id="tab-extra2" hidden></div>
+      <div class="tabpage" id="tab-browser" hidden>
+        <div class="browser-container" id="browserContainer">
+          <div class="browser-nav-bar">
+            <div class="browser-nav-actions">
+              <button type="button" id="browserBtnBack" class="btn ghost icon-only sm" title="Voltar"><i data-lucide="chevron-left"></i></button>
+              <button type="button" id="browserBtnForward" class="btn ghost icon-only sm" title="Avançar"><i data-lucide="chevron-right"></i></button>
+              <button type="button" id="browserBtnReload" class="btn ghost icon-only sm" title="Recarregar"><i data-lucide="rotate-cw"></i></button>
+            </div>
+            <div class="browser-url-wrap">
+              <span class="browser-url-icon" id="browserUrlIcon"><i data-lucide="lock"></i></span>
+              <input type="text" id="browserUrlInput" placeholder="Digite uma URL ou termo de busca…" spellcheck="false" autocomplete="off" />
+              <button type="button" id="browserBtnGo" class="btn ghost icon-only sm" title="Navegar"><i data-lucide="arrow-right"></i></button>
+            </div>
+            <div class="browser-tool-actions">
+              <button type="button" id="browserBtnInspect" class="btn ghost icon-only sm" title="Inspecionar Elementos (Computer Use)"><i data-lucide="scan-search"></i></button>
+              <button type="button" id="browserBtnScreenshot" class="btn ghost icon-only sm" title="Capturar Tela (Screenshot)"><i data-lucide="camera"></i></button>
+              <button type="button" id="browserBtnExpand" class="btn ghost icon-only sm" title="Maximizar / Restaurar"><i data-lucide="maximize-2"></i></button>
+            </div>
+          </div>
+          <div class="browser-subbar">
+            <div class="browser-agent-badge">
+              <span class="browser-dot" id="browserAgentDot"></span>
+              <span id="browserAgentStatus">Agente Conectado · Pronto</span>
+            </div>
+            <div class="browser-meta-info" id="browserMetaInfo">
+              <span>Nenhuma página aberta</span>
+            </div>
+          </div>
+          <div class="browser-viewport" id="browserViewport">
+            <div id="browserEmptyState" class="browser-empty">
+              <div class="browser-empty-icon"><i data-lucide="globe"></i></div>
+              <h4>Navegador do Agente</h4>
+              <p>O Free Agent pode abrir páginas, inspecionar botões e links, interagir e capturar screenshots com Computer Use integrado.</p>
+              <div class="browser-quick-links">
+                <button type="button" class="btn ghost sm" data-quick="https://news.ycombinator.com">Hacker News</button>
+                <button type="button" class="btn ghost sm" data-quick="https://pt.wikipedia.org">Wikipédia</button>
+                <button type="button" class="btn ghost sm" data-quick="https://github.com">GitHub</button>
+              </div>
+            </div>
+            <div id="browserFrameHolder" class="browser-frame-holder" hidden></div>
+            <div id="browserCuOverlay" class="browser-cu-overlay"></div>
+          </div>
+        </div>
+      </div>
       </div>
     </aside>
   </main>
@@ -752,6 +795,7 @@
 <script src="js/code-agent.js"></script>
 <script src="js/term-live.js"></script>
 <script src="js/sandbox.js"></script>
+<script src="js/agent-browser.js"></script>
 <script src="js/i18n.js"></script>
 <script src="js/app.js"></script>
 <script src="js/telegram.js"></script>

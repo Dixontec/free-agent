@@ -43,6 +43,7 @@ function janela() {
       spellcheck: false,
       sandbox: true,
       backgroundThrottling: false,
+      webviewTag: true,
     },
   });
 

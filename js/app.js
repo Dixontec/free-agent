@@ -1048,7 +1048,7 @@ $('#composer').addEventListener('submit', async e => {
   /* ── v2.1: executa → verifica conclusão → corrige pendência → entrega ── */
   if (window.__runReAct) {
     try {
-      const TOOL_LABEL = { web_search: 'Buscando fontes', web_open: 'Lendo página', open_site: 'Abrindo site', run_skill: 'Executando skill', music_search: 'Buscando música livre', music_download: 'Baixando MP3', music_play: 'Tocando música', create_task: 'Criando tarefa', list_tasks: 'Lendo tarefas', complete_task: 'Concluindo tarefa', delete_task: 'Deletando tarefa', create_note: 'Criando nota', list_notes: 'Lendo notas', edit_note: 'Editando nota', delete_note: 'Deletando nota', list_convs: 'Listando conversas', read_conv: 'Lendo conversa', save_correction: 'Salvando correção', news: 'Lendo notícias', code_read: 'Lendo arquivo', code_list: 'Listando pasta', code_glob: 'Buscando arquivos', code_grep: 'Buscando texto', code_write: 'Escrevendo arquivo', code_edit: 'Editando arquivo', code_bash: 'Executando comando', code_undo: 'Desfazendo' };
+      const TOOL_LABEL = { web_search: 'Buscando fontes', web_open: 'Lendo página', open_site: 'Abrindo site', run_skill: 'Executando skill', music_search: 'Buscando música livre', music_download: 'Baixando MP3', music_play: 'Tocando música', create_task: 'Criando tarefa', list_tasks: 'Lendo tarefas', complete_task: 'Concluindo tarefa', delete_task: 'Deletando tarefa', create_note: 'Criando nota', list_notes: 'Lendo notas', edit_note: 'Editando nota', delete_note: 'Deletando nota', list_convs: 'Listando conversas', read_conv: 'Lendo conversa', save_correction: 'Salvando correção', browser_open: 'Navegando no browser', browser_inspect: 'Inspecionando página', browser_click: 'Clicando no browser', browser_type: 'Digitando no browser', browser_screenshot: 'Capturando tela', browser_scroll: 'Rolando página', news: 'Lendo notícias', code_read: 'Lendo arquivo', code_list: 'Listando pasta', code_glob: 'Buscando arquivos', code_grep: 'Buscando texto', code_write: 'Escrevendo arquivo', code_edit: 'Editando arquivo', code_bash: 'Executando comando', code_undo: 'Desfazendo' };
       const runAw = agentWin({ icon: 'bot', title: 'Agente · ' + text.slice(0, 60), body: `<div class="awline">${ic('circle-dot')}<span>Iniciando: <b>${escapeHtml(text.slice(0, 100))}</b></span></div>` });
       const execToolReal = async (name, arg) => {
         const label = TOOL_LABEL[name] || name;
@@ -3524,6 +3524,12 @@ async function execTool(name, arg, step) {
     } catch {}
     return String(r.msg).slice(0, 6500);
   }
+  if (name.startsWith('browser_')) {
+    if (window.AgentBrowser && typeof window.AgentBrowser.execTool === 'function') {
+      return await window.AgentBrowser.execTool(name, arg, say);
+    }
+    throw new Error('Módulo AgentBrowser não inicializado.');
+  }
   if (name === 'music_search') {
     say('Buscando em Archive.org + Wikimedia…');
     const list = await window.MusicRepos.search(arg, 'all', 6);
@@ -3938,8 +3944,12 @@ async function teamFlow(task) {
 /* ───────── TABS / LOG / TOAST / EXPORT ───────── */
 function switchTab(name) {
   $$('.tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
-  ['routines', 'music', 'skills', 'tasks', 'reminders', 'log', 'notes', 'extra1', 'extra2'].forEach(t => $('#tab-' + t).hidden = t !== name);
+  ['routines', 'music', 'skills', 'tasks', 'reminders', 'log', 'notes', 'extra1', 'extra2', 'browser'].forEach(t => {
+    const el = $('#tab-' + t);
+    if (el) el.hidden = t !== name;
+  });
 }
+window.switchTab = switchTab;
 $$('.tabs button').forEach(b => b.onclick = () => switchTab(b.dataset.tab));
 
 function log(msg, kind = 'info', detail = '') {

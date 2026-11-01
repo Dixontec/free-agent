@@ -385,7 +385,7 @@ registerProcessor('rt-cap',RT);`;
   // Pedidos que precisam de ferramentas/dados do app (tarefas, notas, memória, conversas, web, música…) vão direto
   // pelo MESMO pipeline do chat de texto (v2: executa → verifica → entrega). O resto é conversa: streaming + fala.
   const B = '(?<![\\wÀ-ÿ])', E = '(?![\\wÀ-ÿ])';
-  const ACTION_RE = new RegExp(B + '(?:tarefas?|notas?|anota\\w*|mem[óo]ria|lembra\\w*|lembrete\\w*|esquece\\w*|conversas?|hist[óo]rico|pesquis\\w*|busc\\w*|procur\\w*|not[íi]cias?|abr(?:e|ir)|acess\\w*|toca(?:r)?|toque|m[úu]sica\\w*|v[íi]deo\\w*|youtube|baix\\w*|download|skills?|rotinas?|arquivos?|c[óo]digo|pasta|execut\\w*|rod(?:e|ar)|cri(?:e|ar|a)|adicion\\w*|apag\\w*|delet\\w*|exclu\\w*|conclu\\w*|marc(?:a|ar)|list(?:a|ar)|mostr\\w*|ler|leia|lê|edit\\w*|salv\\w*|agenda\\w*|clima|previs[ãa]o|pre[çc]o|cota[çc][ãa]o)' + E, 'i');
+  const ACTION_RE = new RegExp(B + '(?:tarefas?|notas?|anota\\w*|mem[óo]ria|lembra\\w*|lembrete\\w*|esquece\\w*|conversas?|hist[óo]rico|pesquis\\w*|busc\\w*|procur\\w*|not[íi]cias?|abr(?:e|ir)|acess\\w*|toca(?:r)?|toque|m[úu]sica\\w*|v[íi]deo\\w*|youtube|baix\\w*|download|skills?|rotinas?|arquivos?|c[óo]digo|pasta|execut\\w*|rod(?:e|ar)|cri(?:e|ar|a)|adicion\\w*|apag\\w*|delet\\w*|exclu\\w*|conclu\\w*|marc(?:a|ar)|list(?:a|ar)|mostr\\w*|ler|leia|lê|edit\\w*|salv\\w*|agenda\\w*|clima|previs[ãa]o|pre[çc]o|cota[çc][ãa]o|navegador\\w*|browser\\w*|cliqu\\w*|clic\\w*|digit\\w*|scroll\\w*|inspecion\\w*|screenshot|print)' + E, 'i');
   const AGIR_RE = new RegExp('^@?AGIR' + E, 'i');
   function voiceSystem() {
     let mem = ''; try { mem = typeof memBlock === 'function' ? memBlock() : ''; } catch {}
@@ -526,6 +526,160 @@ registerProcessor('rt-cap',RT);`;
     S.finishTurn = null;
   }
 
+  /* ───────── Assistente / Modal de Ativação do Kokoro AI ───────── */
+  function openKokoroModal(forced = false) {
+    return new Promise(resolve => {
+      let modal = $('#kokoroModal');
+      if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'kokoroModal';
+        modal.className = 'modal';
+        modal.hidden = true;
+        modal.innerHTML = `
+          <div class="modal-card glass-card" style="max-width:480px;padding:24px;border-radius:20px;box-shadow:0 24px 70px rgba(0,0,0,.35)">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+              <div style="display:flex;align-items:center;gap:10px">
+                <div style="width:36px;height:36px;border-radius:10px;background:var(--grad);display:grid;place-items:center;color:#fff;box-shadow:0 0 16px rgba(125,42,255,.4)">
+                  <i data-lucide="sparkles"></i>
+                </div>
+                <div>
+                  <h3 style="margin:0;font-size:16px;font-weight:600">Voz em Tempo Real</h3>
+                  <span style="font-size:12px;color:var(--muted)">Escolha a qualidade da sua voz</span>
+                </div>
+              </div>
+              <button id="kmClose" class="btn ghost sm icon-only" title="Fechar"><i data-lucide="x"></i></button>
+            </div>
+
+            <p style="font-size:13px;line-height:1.5;color:var(--ink);margin-bottom:16px">
+              O Free Agent possui suporte ao <b>Kokoro AI</b>: nosso motor de síntese ultrarrealista com vozes humanas brasileiras (Dora e Alex), sem custos de API e resposta imediata.
+            </p>
+
+            <div id="kmChoiceView">
+              <!-- Card Kokoro (Destaque) -->
+              <div id="kmCardKokoro" style="border:1.5px solid var(--accent);border-radius:14px;padding:14px 16px;background:rgba(0,113,227,.05);margin-bottom:12px;cursor:pointer;transition:all .18s ease">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+                  <b style="font-size:13.5px;color:var(--accent);display:flex;align-items:center;gap:6px">
+                    <i data-lucide="zap"></i> Kokoro AI (Recomendado)
+                  </b>
+                  <span style="font-size:10px;font-weight:600;text-transform:uppercase;background:var(--accent);color:#fff;padding:2px 7px;border-radius:999px">Melhor Qualidade</span>
+                </div>
+                <p style="font-size:12px;color:var(--muted);margin:0 0 10px 0;line-height:1.4">
+                  Síntese ultrarrealista com entonação humana e transcrição rápida. Baixa os modelos uma única vez.
+                </p>
+                <button type="button" id="kmBtnKokoro" class="btn primary sm" style="width:100%;justify-content:center;font-weight:600">
+                  <i data-lucide="download"></i> Baixar e Ativar Kokoro
+                </button>
+              </div>
+
+              <!-- Card Padrão -->
+              <div id="kmCardStandard" style="border:1px solid var(--stroke);border-radius:14px;padding:14px 16px;background:var(--card);cursor:pointer;transition:all .18s ease">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                  <b style="font-size:13px;color:var(--ink);display:flex;align-items:center;gap:6px">
+                    <i data-lucide="volume-2"></i> Usar Voz Padrão
+                  </b>
+                </div>
+                <p style="font-size:12px;color:var(--muted);margin:0 0 10px 0;line-height:1.4">
+                  Sem downloads adicionais. Usa as vozes já disponíveis no seu navegador ou sistema.
+                </p>
+                <button type="button" id="kmBtnStandard" class="btn ghost sm" style="width:100%;justify-content:center">
+                  Continuar com Voz Padrão
+                </button>
+              </div>
+            </div>
+
+            <!-- View de Progresso do Download -->
+            <div id="kmProgView" hidden style="margin-top:10px">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+                <span id="kmProgLabel" style="font-size:12.5px;font-weight:500;color:var(--ink)">Baixando modelo Kokoro…</span>
+                <span id="kmProgPct" style="font-size:12px;font-family:var(--mono);color:var(--muted)">0%</span>
+              </div>
+              <div style="width:100%;height:8px;background:rgba(127,127,137,.2);border-radius:99px;overflow:hidden;margin-bottom:12px">
+                <div id="kmProgBar" style="width:0%;height:100%;background:var(--grad);border-radius:99px;transition:width .2s ease"></div>
+              </div>
+              <p id="kmProgDetail" style="font-size:11.5px;color:var(--muted);line-height:1.4;margin:0 0 14px 0">Preparando download...</p>
+              <div id="kmDoneActions" hidden class="btnrow" style="margin-top:8px">
+                <button type="button" id="kmBtnDone" class="btn primary sm" style="width:100%;justify-content:center">Iniciar Conversa</button>
+              </div>
+            </div>
+          </div>
+        `;
+        document.body.appendChild(modal);
+        try { window.lucide && lucide.createIcons(); } catch {}
+      }
+
+      const close = (val) => {
+        modal.hidden = true;
+        resolve(val);
+      };
+
+      $('#kmClose').onclick = () => close(null);
+      $('#kmBtnStandard').onclick = () => {
+        try { localStorage.setItem('nexus:kokoro_choice', 'standard'); } catch {}
+        close('standard');
+      };
+
+      const startDownload = async () => {
+        $('#kmChoiceView').hidden = true;
+        $('#kmProgView').hidden = false;
+        try { localStorage.setItem('nexus:kokoro_choice', 'kokoro'); } catch {}
+
+        const files = [
+          { name: 'voices-v1.0.bin', url: 'https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin', size: 28 * 1024 * 1024 },
+          { name: 'kokoro-v1.0.onnx', url: 'https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx', size: 325 * 1024 * 1024 },
+        ];
+
+        let totalBytes = files.reduce((a, b) => a + b.size, 0);
+        let loadedTotal = 0;
+
+        try {
+          for (const f of files) {
+            $('#kmProgLabel').textContent = `Baixando ${f.name}…`;
+            let fLoaded = 0;
+            const resp = await fetch(f.url);
+            if (!resp.ok) throw new Error(`Falha ao baixar ${f.name}: HTTP ${resp.status}`);
+            const reader = resp.body.getReader();
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              fLoaded += value.length;
+              loadedTotal += value.length;
+              const pct = Math.min(100, Math.round((loadedTotal / totalBytes) * 100));
+              $('#kmProgPct').textContent = `${pct}%`;
+              $('#kmProgBar').style.width = `${pct}%`;
+              $('#kmProgDetail').textContent = `${(loadedTotal / (1024 * 1024)).toFixed(1)} MB de ${(totalBytes / (1024 * 1024)).toFixed(0)} MB`;
+            }
+          }
+
+          $('#kmProgLabel').textContent = 'Kokoro pronto para uso!';
+          $('#kmProgPct').textContent = '100%';
+          $('#kmProgBar').style.width = '100%';
+          $('#kmProgDetail').innerHTML = 'Modelos baixados com sucesso. O motor Kokoro de alta qualidade está ativado.';
+          $('#kmDoneActions').hidden = false;
+          $('#kmBtnDone').onclick = async () => {
+            await probe();
+            close('kokoro');
+          };
+        } catch (err) {
+          $('#kmProgLabel').textContent = 'Download não concluído';
+          $('#kmProgDetail').textContent = 'Erro ao baixar: ' + (err.message || err) + '. Você pode usar a voz padrão por enquanto.';
+          $('#kmDoneActions').hidden = false;
+          $('#kmBtnDone').textContent = 'Continuar com Voz Padrão';
+          $('#kmBtnDone').onclick = () => close('standard');
+        }
+      };
+
+      $('#kmBtnKokoro').onclick = startDownload;
+      $('#kmCardKokoro').onclick = (e) => { if (e.target !== $('#kmBtnKokoro')) startDownload(); };
+      $('#kmCardStandard').onclick = (e) => { if (e.target !== $('#kmBtnStandard')) $('#kmBtnStandard').click(); };
+
+      // Reset estado visual ao abrir
+      $('#kmChoiceView').hidden = false;
+      $('#kmProgView').hidden = true;
+      modal.hidden = false;
+      try { window.lucide && lucide.createIcons(); } catch {}
+    });
+  }
+
   /* ───────── ciclo de vida ───────── */
   async function start() {
     if (S.on) return;
@@ -533,6 +687,15 @@ registerProcessor('rt-cap',RT);`;
     const p = cfg.provider;
     if (!(keys[p] || p === 'ollama' || p === 'lmstudio')) { note('plug', 'Conecte um provedor de IA antes (Configurações).'); return; }
     if (window.Voice && window.Voice.state !== 'idle') { note('mic-off', 'Termine a gravação do ditado primeiro.'); return; }
+
+    // Na 1ª ativação: se o Kokoro não estiver ativo e o usuário ainda não tiver decidido, pergunta
+    await probe();
+    const kokoroDecided = (() => { try { return localStorage.getItem('nexus:kokoro_choice'); } catch { return null; } })();
+    if (!S.srv?.tts && !kokoroDecided) {
+      const choice = await openKokoroModal(false);
+      if (!choice) return;
+    }
+
     ui();
     let stream;
     try { stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } }); }
@@ -613,10 +776,21 @@ registerProcessor('rt-cap',RT);`;
         <div class="btnrow"><button type="button" id="rtLoadV" class="btn ghost sm">Reconectar / recarregar vozes</button></div>
       </div>
       <label class="fld"><span>Velocidade: <b id="rtRateV"></b>×</span><input id="rtRate" type="range" min="0.7" max="1.5" step="0.05" /></label>
-      <div class="btnrow"><button type="button" id="rtTest" class="btn ghost sm"><i data-lucide="volume-2"></i><span>Ouvir amostra</span></button></div>
+      <div class="fld" style="margin-top:14px;padding:12px 14px;border-radius:12px;background:rgba(127,127,137,.06);border:1px solid var(--stroke)">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+          <div>
+            <b style="font-size:13px;display:flex;align-items:center;gap:6px">
+              <i data-lucide="sparkles"></i> Modelo Kokoro AI (Alta Fidelidade)
+            </b>
+            <p class="hint" style="margin:2px 0 0 0" id="rtKokoroStatus">Voz neural ultrarrealista em português brasileiro.</p>
+          </div>
+          <button type="button" id="rtOpenKokoroModal" class="btn ghost sm"><i data-lucide="download"></i> Baixar / Ativar</button>
+        </div>
+      </div>
       <p class="hint" id="rtInfo"></p>`;
     grid.appendChild(sec);
     try { window.lucide && lucide.createIcons(); } catch {}
+    $('#rtOpenKokoroModal').onclick = () => openKokoroModal(true);
     const fillBrowser = () => {
       const vs = bVoices().slice().sort((a, b) => (/^pt/i.test(b.lang) - /^pt/i.test(a.lang)) || a.name.localeCompare(b.name));
       const sel = $('#rtVoice');

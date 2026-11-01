@@ -837,3 +837,43 @@ html[data-theme="light"] #cxTemp{color:#1d1d1f}
 .mside-row .mtxt{flex:1;min-width:0}
 .mside-row .mtxt b{display:block;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .mside-row .mtxt small{font-size:10.5px;color:var(--muted)}
+
+/* ═══════════ Embedded Browser & Computer Use ═══════════ */
+.browser-container{display:flex;flex-direction:column;height:calc(100vh - 220px);min-height:540px;background:var(--card);border:1px solid var(--stroke);border-radius:16px;overflow:hidden;position:relative;box-shadow:var(--shadow);transition:all .25s ease}
+.browser-container.maximized{position:fixed;top:16px;left:16px;right:16px;bottom:16px;height:auto;min-height:0;z-index:900;border-radius:18px;box-shadow:0 30px 90px rgba(0,0,0,.45);backdrop-filter:blur(30px)}
+.browser-nav-bar{display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(127,127,137,.06);border-bottom:1px solid var(--stroke);flex-shrink:0}
+.browser-nav-actions,.browser-tool-actions{display:flex;align-items:center;gap:3px;flex-shrink:0}
+.browser-url-wrap{flex:1;display:flex;align-items:center;gap:6px;background:var(--input);border:1px solid var(--stroke);border-radius:10px;padding:4px 8px;min-width:0;transition:border-color .2s,box-shadow .2s}
+.browser-url-wrap:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px rgba(0,113,227,.18)}
+.browser-url-icon{color:var(--muted);display:grid;place-items:center;flex-shrink:0;font-size:13px}
+.browser-url-icon svg.lucide{width:13px;height:13px}
+.browser-url-wrap input{flex:1;border:0;background:transparent;color:var(--ink);font:500 12.5px var(--font);outline:none;min-width:0}
+.browser-subbar{display:flex;align-items:center;justify-content:space-between;padding:5px 12px;background:rgba(127,127,137,.04);border-bottom:1px solid var(--stroke);font-size:11px;color:var(--muted);flex-shrink:0}
+.browser-agent-badge{display:inline-flex;align-items:center;gap:6px;font-weight:600;color:var(--ink)}
+.browser-dot{width:7px;height:7px;border-radius:50%;background:#30d158;box-shadow:0 0 6px #30d158}
+.browser-dot.busy{background:#ff9f0a;box-shadow:0 0 6px #ff9f0a;animation:blink 1s infinite}
+.browser-meta-info{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:60%;font-size:11px}
+.browser-viewport{flex:1;position:relative;background:#ffffff;overflow:hidden;min-height:360px}
+.browser-empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px;color:var(--muted);background:var(--card)}
+.browser-empty-icon{width:50px;height:50px;border-radius:14px;background:var(--grad);color:#fff;display:grid;place-items:center;margin-bottom:12px;box-shadow:0 6px 20px rgba(0,113,227,.3)}
+.browser-empty-icon svg.lucide{width:24px;height:24px}
+.browser-empty h4{font-size:15px;font-weight:700;color:var(--ink);margin-bottom:6px}
+.browser-empty p{font-size:12px;line-height:1.55;max-width:320px;margin-bottom:16px}
+.browser-quick-links{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
+.browser-frame-holder{position:absolute;inset:0;width:100%;height:100%}
+.browser-frame-holder webview,.browser-frame-holder iframe{width:100%;height:100%;border:none;display:block;background:#ffffff}
+.browser-cu-overlay{position:absolute;inset:0;pointer-events:none;z-index:100;overflow:hidden}
+
+/* ── Computer Use: Efeitos visuais de clique e captura ── */
+@keyframes cuPulse{
+  0%{transform:translate(-50%,-50%) scale(0.3);opacity:1;border-width:4px}
+  100%{transform:translate(-50%,-50%) scale(2.2);opacity:0;border-width:1px}
+}
+.cu-click-ring{position:absolute;width:38px;height:38px;border-radius:50%;border:3px solid var(--accent);background:rgba(0,113,227,.25);pointer-events:none;z-index:1000;animation:cuPulse .6s cubic-bezier(.1,.8,.3,1) forwards;transform:translate(-50%,-50%)}
+
+@keyframes cuFlash{
+  0%{opacity:.85}
+  100%{opacity:0}
+}
+.cu-screenshot-flash{position:absolute;inset:0;background:#ffffff;pointer-events:none;z-index:1001;animation:cuFlash .4s ease-out forwards}
+
