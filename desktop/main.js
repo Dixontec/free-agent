@@ -9,6 +9,8 @@
 
 const { app, BrowserWindow, Menu, shell, dialog, nativeImage } = require('electron');
 const path = require('path');
+const fs = require('fs');
+const { spawn } = require('child_process');
 const { createStaticServer } = require('./server');
 
 const PORTA = 47811;              // fixa de propósito (origem estável p/ localStorage)
@@ -17,6 +19,59 @@ const ORIGEM = `http://127.0.0.1:${PORTA}`;
 
 let win = null;
 let server = null;
+let voiceProcess = null;
+
+function resolvePythonBinary() {
+  const isWin = process.platform === 'win32';
+  const candidates = [
+    isWin ? path.join(RAIZ, 'voice-server', '.venv', 'Scripts', 'python.exe') : path.join(RAIZ, 'voice-server', '.venv', 'bin', 'python'),
+    isWin ? path.join(RAIZ, '.venv', 'Scripts', 'python.exe') : path.join(RAIZ, '.venv', 'bin', 'python'),
+  ];
+  for (const c of candidates) {
+    if (fs.existsSync(c)) return c;
+  }
+  return isWin ? 'python' : 'python3';
+}
+
+function iniciaServidorVoz() {
+  const scriptPath = path.join(RAIZ, 'voice-server', 'voice_server.py');
+  if (!fs.existsSync(scriptPath)) return;
+
+  const pythonBin = resolvePythonBinary();
+  try {
+    voiceProcess = spawn(pythonBin, [scriptPath], {
+      cwd: path.join(RAIZ, 'voice-server'),
+      detached: false,
+      stdio: 'ignore',
+    });
+
+    voiceProcess.on('error', (err) => {
+      console.warn('[voice-server] Falha ao iniciar processo de voz:', err.message);
+      voiceProcess = null;
+    });
+
+    voiceProcess.on('exit', () => {
+      voiceProcess = null;
+    });
+  } catch (err) {
+    console.warn('[voice-server] Erro ao spawnar servidor de voz:', err.message);
+  }
+}
+
+function encerraServidorVoz() {
+  if (voiceProcess) {
+    const proc = voiceProcess;
+    voiceProcess = null;
+    try {
+      proc.kill('SIGTERM');
+    } catch {}
+    setTimeout(() => {
+      try {
+        if (!proc.killed) proc.kill('SIGKILL');
+      } catch {}
+    }, 1200);
+  }
+}
 
 function sobeServidor() {
   return new Promise((resolve, reject) => {
@@ -100,10 +155,19 @@ if (!trava) {
       app.quit();
       return;
     }
+    iniciaServidorVoz();
     janela();
     app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) janela(); });
   });
 
-  app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
-  app.on('before-quit', () => { if (server) { try { server.close(); } catch {} server = null; } });
+  app.on('window-all-closed', () => {
+    encerraServidorVoz();
+    if (process.platform !== 'darwin') app.quit();
+  });
+  app.on('before-quit', () => {
+    encerraServidorVoz();
+    if (server) { try { server.close(); } catch {} server = null; }
+  });
+  process.on('exit', encerraServidorVoz);
 }
+
