@@ -623,38 +623,71 @@ registerProcessor('rt-cap',RT);`;
         $('#kmProgView').hidden = false;
         try { localStorage.setItem('nexus:kokoro_choice', 'kokoro'); } catch {}
 
-        const files = [
-          { name: 'voices-v1.0.bin', url: 'https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin', size: 28 * 1024 * 1024 },
-          { name: 'kokoro-v1.0.onnx', url: 'https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx', size: 325 * 1024 * 1024 },
-        ];
-
-        let totalBytes = files.reduce((a, b) => a + b.size, 0);
-        let loadedTotal = 0;
-
         try {
-          for (const f of files) {
-            $('#kmProgLabel').textContent = `Baixando ${f.name}…`;
-            let fLoaded = 0;
-            const resp = await fetch(f.url);
-            if (!resp.ok) throw new Error(`Falha ao baixar ${f.name}: HTTP ${resp.status}`);
-            const reader = resp.body.getReader();
-            while (true) {
-              const { done, value } = await reader.read();
-              if (done) break;
-              fLoaded += value.length;
-              loadedTotal += value.length;
-              const pct = Math.min(100, Math.round((loadedTotal / totalBytes) * 100));
+          $('#kmProgLabel').textContent = 'Iniciando download…';
+          $('#kmProgPct').textContent = '0%';
+          $('#kmProgBar').style.width = '0%';
+          $('#kmProgDetail').textContent = 'Conectando ao repositório de modelos…';
+
+          // Inicia o download no backend local (Node/Electron), sem restrições de CORS
+          const res = await fetch('/api/kokoro/download', { method: 'POST' });
+          if (!res.ok) throw new Error(`Falha na requisição local: HTTP ${res.status}`);
+
+          // Polling de progresso
+          let downloadDone = false;
+          while (!downloadDone) {
+            await sleep(300);
+            let st = null;
+            try {
+              const stRes = await fetch('/api/kokoro/status');
+              if (stRes.ok) st = await stRes.json();
+            } catch {}
+
+            if (!st) continue;
+            if (st.error) throw new Error(st.error);
+
+            if (st.progress) {
+              const p = st.progress;
+              const fName = p.file || 'modelos';
+              $('#kmProgLabel').textContent = `Baixando ${fName}…`;
+              const pct = Math.max(0, Math.min(100, p.pct || 0));
               $('#kmProgPct').textContent = `${pct}%`;
               $('#kmProgBar').style.width = `${pct}%`;
-              $('#kmProgDetail').textContent = `${(loadedTotal / (1024 * 1024)).toFixed(1)} MB de ${(totalBytes / (1024 * 1024)).toFixed(0)} MB`;
+              const mbLoaded = ((p.loaded || 0) / (1024 * 1024)).toFixed(1);
+              const mbTotal = ((p.total || 370435312) / (1024 * 1024)).toFixed(0);
+              $('#kmProgDetail').textContent = `${mbLoaded} MB de ${mbTotal} MB`;
+            }
+
+            if (st.done || (!st.isDownloading && st.modelsExist)) {
+              downloadDone = true;
+            }
+          }
+
+          $('#kmProgLabel').textContent = 'Iniciando motor de voz Kokoro…';
+          $('#kmProgPct').textContent = '100%';
+          $('#kmProgBar').style.width = '100%';
+          $('#kmProgDetail').textContent = 'Aguardando inicialização do servidor de voz…';
+
+          // Garante inicialização e aguarda servidor responder
+          try { await fetch('/api/kokoro/start-server', { method: 'POST' }); } catch {}
+          let serverOnline = false;
+          for (let i = 0; i < 25; i++) {
+            await sleep(500);
+            await probe();
+            if (S.srv?.tts) {
+              serverOnline = true;
+              break;
             }
           }
 
           $('#kmProgLabel').textContent = 'Kokoro pronto para uso!';
           $('#kmProgPct').textContent = '100%';
           $('#kmProgBar').style.width = '100%';
-          $('#kmProgDetail').innerHTML = 'Modelos baixados com sucesso. O motor Kokoro de alta qualidade está ativado.';
+          $('#kmProgDetail').innerHTML = serverOnline
+            ? 'Modelos baixados e motor ativado com sucesso.'
+            : 'Modelos prontos. O motor Kokoro está configurado.';
           $('#kmDoneActions').hidden = false;
+          $('#kmBtnDone').textContent = 'Iniciar Conversa';
           $('#kmBtnDone').onclick = async () => {
             await probe();
             close('kokoro');
@@ -675,8 +708,17 @@ registerProcessor('rt-cap',RT);`;
       // Reset estado visual ao abrir
       $('#kmChoiceView').hidden = false;
       $('#kmProgView').hidden = true;
+      $('#kmDoneActions').hidden = true;
       modal.hidden = false;
       try { window.lucide && lucide.createIcons(); } catch {}
+
+      // Se modelos já existem em disco, adapta label do botão
+      fetch('/api/kokoro/status').then(r => r.json()).then(st => {
+        if (st.modelsExist && $('#kmBtnKokoro')) {
+          $('#kmBtnKokoro').innerHTML = '<i data-lucide="zap"></i> Ativar Kokoro (Já baixado)';
+          try { window.lucide && lucide.createIcons(); } catch {}
+        }
+      }).catch(() => {});
     });
   }
 
@@ -688,12 +730,31 @@ registerProcessor('rt-cap',RT);`;
     if (!(keys[p] || p === 'ollama' || p === 'lmstudio')) { note('plug', 'Conecte um provedor de IA antes (Configurações).'); return; }
     if (window.Voice && window.Voice.state !== 'idle') { note('mic-off', 'Termine a gravação do ditado primeiro.'); return; }
 
-    // Na 1ª ativação: se o Kokoro não estiver ativo e o usuário ainda não tiver decidido, pergunta
+    // Na 1ª ativação: se o Kokoro não estiver ativo e o usuário ainda não tiver decidido, verifica modelos
     await probe();
     const kokoroDecided = (() => { try { return localStorage.getItem('nexus:kokoro_choice'); } catch { return null; } })();
     if (!S.srv?.tts && !kokoroDecided) {
-      const choice = await openKokoroModal(false);
-      if (!choice) return;
+      let modelsOnDisk = false;
+      try {
+        const stRes = await fetch('/api/kokoro/status');
+        const st = await stRes.json();
+        modelsOnDisk = !!st.modelsExist;
+      } catch {}
+
+      if (modelsOnDisk) {
+        // Modelos já existem em disco: tenta subir o servidor e aguarda brevemente
+        try { await fetch('/api/kokoro/start-server', { method: 'POST' }); } catch {}
+        for (let i = 0; i < 6; i++) {
+          await sleep(500);
+          await probe();
+          if (S.srv?.tts) break;
+        }
+      }
+
+      if (!S.srv?.tts && !kokoroDecided && !modelsOnDisk) {
+        const choice = await openKokoroModal(false);
+        if (!choice) return;
+      }
     }
 
     ui();

@@ -75,7 +75,7 @@ function encerraServidorVoz() {
 
 function sobeServidor() {
   return new Promise((resolve, reject) => {
-    server = createStaticServer(RAIZ);
+    server = createStaticServer(RAIZ, { onKokoroDownloaded: iniciaServidorVoz });
     server.once('error', reject);
     server.listen(PORTA, '127.0.0.1', () => resolve());
   });
