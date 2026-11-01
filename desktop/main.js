@@ -42,6 +42,7 @@ function janela() {
       nodeIntegration: false,
       spellcheck: false,
       sandbox: true,
+      backgroundThrottling: false,
     },
   });
 

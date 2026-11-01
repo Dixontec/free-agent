@@ -19,3 +19,7 @@ Thumbs.db
 dist/
 # Extração do AppImage (./Free-Agent-*.AppImage --appimage-extract)
 squashfs-root/
+
+# Servidor de voz local (venv + modelos grandes)
+voice-server/.venv/
+voice-server/models/
