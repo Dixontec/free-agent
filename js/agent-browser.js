@@ -82,6 +82,8 @@ window.AgentBrowser = (() => {
     setTimeout(() => flash.remove(), 450);
   }
 
+  const MOBILE_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1';
+
   /* ── Inicialização do Frame do Navegador ── */
   function setupFrame() {
     const holder = $('#browserFrameHolder');
@@ -94,6 +96,9 @@ window.AgentBrowser = (() => {
       wv.setAttribute('src', 'about:blank');
       wv.setAttribute('allowpopups', 'true');
       wv.setAttribute('webpreferences', 'contextIsolation=yes, javascript=yes');
+      if (!state.isMaximized) {
+        wv.setAttribute('useragent', MOBILE_UA);
+      }
       wv.style.width = '100%';
       wv.style.height = '100%';
       wv.style.border = 'none';
@@ -684,16 +689,48 @@ window.AgentBrowser = (() => {
     $('#browserBtnInspect')?.addEventListener('click', () => inspect());
     $('#browserBtnScreenshot')?.addEventListener('click', () => screenshot());
 
-    // Botão Maximizar / Restaurar
-    $('#browserBtnExpand')?.addEventListener('click', () => {
+    // Botão Maximizar / Restaurar (visão horizontal ampla vs visão mobile vertical)
+    function toggleMaximize(forceState) {
       const container = $('#browserContainer');
       if (!container) return;
-      state.isMaximized = !state.isMaximized;
+      state.isMaximized = typeof forceState === 'boolean' ? forceState : !state.isMaximized;
       container.classList.toggle('maximized', state.isMaximized);
+      document.body.classList.toggle('browser-maximized', state.isMaximized);
       const icon = $('#browserBtnExpand i');
       if (icon) {
         icon.setAttribute('data-lucide', state.isMaximized ? 'minimize-2' : 'maximize-2');
         try { if (window.lucide) lucide.createIcons(); } catch {}
+      }
+      const expBtn = $('#browserBtnExpand');
+      if (expBtn) {
+        expBtn.title = state.isMaximized ? 'Restaurar visão mobile' : 'Ampliar (Janela horizontal grande)';
+      }
+      if (state.mode === 'electron' && state.frame) {
+        try {
+          if (typeof state.frame.setUserAgent === 'function') {
+            state.frame.setUserAgent(state.isMaximized ? '' : MOBILE_UA);
+          }
+        } catch {}
+      }
+    }
+
+    // Fechar navegador (retorna à aba anterior / rotinas)
+    function closeBrowser() {
+      if (state.isMaximized) {
+        toggleMaximize(false);
+      }
+      if (typeof window.switchTab === 'function') {
+        const backTab = window._lastActiveTab && window._lastActiveTab !== 'browser' ? window._lastActiveTab : 'routines';
+        window.switchTab(backTab);
+      }
+    }
+
+    $('#browserBtnExpand')?.addEventListener('click', () => toggleMaximize());
+    $('#browserBtnClose')?.addEventListener('click', closeBrowser);
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && state.isMaximized) {
+        toggleMaximize(false);
       }
     });
 
@@ -716,6 +753,8 @@ window.AgentBrowser = (() => {
   return {
     init,
     open,
+    close: closeBrowser,
+    toggleMaximize,
     inspect,
     click,
     type,

@@ -2321,18 +2321,38 @@ $('#btnModels').onclick = () => { saveCfg(true); fetchModels(false); };
 $('#btnModelsQuick').onclick = () => { saveCfg(true); fetchModels(false); };
 
 /* ───────── PLANO DE FUNDO (seleção + desfoque) ───────── */
-function getBg() { return Object.assign({ mode: 'preset', preset: 'assets/bg-green.jpg', blur: 4, custom: '' }, store.get('bg', {})); }
+function getBg() { return Object.assign({ mode: 'preset', preset: 'assets/bg-green.jpg', blur: 4, custom: '', color: '#0d1117' }, store.get('bg', {})); }
 function applyBackground() {
   const bg = getBg();
   const show3d = bg.mode === 'combo' || bg.mode === '3d';
   const showAur = bg.mode === 'combo' || bg.mode === 'aurora';
   const showCus = (bg.mode === 'custom' && !!bg.custom) || bg.mode === 'preset';
   const showVid = bg.mode === 'video' && !!bg.preset;
+  const isNone = bg.mode === 'none';
   const cv = $('#bg3d'), au = $('#aurora'), cu = $('#bgCustom');
   if (cv) cv.style.display = show3d ? 'block' : 'none';
   window.__bg3dEnabled = show3d;
   if (au) au.style.display = showAur ? 'block' : 'none';
-  if (cu) { cu.style.display = showCus ? 'block' : 'none'; if (showCus) cu.style.backgroundImage = `url("${bg.mode === 'preset' ? bg.preset : bg.custom}")`; }
+  if (cu) {
+    if (showCus) {
+      cu.style.display = 'block';
+      cu.style.backgroundColor = '';
+      cu.style.backgroundImage = `url("${bg.mode === 'preset' ? bg.preset : bg.custom}")`;
+    } else if (isNone) {
+      cu.style.display = 'block';
+      cu.style.backgroundImage = 'none';
+      cu.style.backgroundColor = bg.color || '#0d1117';
+    } else {
+      cu.style.display = 'none';
+      cu.style.backgroundColor = '';
+      cu.style.backgroundImage = 'none';
+    }
+  }
+  if (isNone) {
+    document.body.style.backgroundColor = bg.color || '#0d1117';
+  } else {
+    document.body.style.backgroundColor = '';
+  }
   const vv = $('#bgVideo');
   if (vv) {
     vv.style.display = showVid ? 'block' : 'none';
@@ -2348,9 +2368,29 @@ function applyBackground() {
   const sel = $('#bgSelect'); if (sel && sel.value !== bg.mode) sel.value = bg.mode;
   const bb = $('#bgBlur'); if (bb && +bb.value !== bg.blur) bb.value = bg.blur;
   if ($('#bgUploadWrap')) $('#bgUploadWrap').hidden = bg.mode !== 'custom';
+  if ($('#bgColorWrap')) $('#bgColorWrap').hidden = !isNone;
+  if ($('#bgColor')) $('#bgColor').value = bg.color || '#0d1117';
+  if ($('#bgColorHex')) $('#bgColorHex').value = (bg.color || '#0d1117').toUpperCase();
+  if ($('#bgColorVal')) $('#bgColorVal').textContent = (bg.color || '#0d1117').toUpperCase();
+}
+function setSolidBgColor(c) {
+  if (!c) return;
+  const bg = getBg();
+  bg.color = c;
+  store.set('bg', bg);
+  applyBackground();
 }
 $('#bgSelect').onchange = () => { const bg = getBg(); bg.mode = $('#bgSelect').value; if (bg.mode === 'preset' && !bg.preset) bg.preset = 'assets/bg-green.jpg'; store.set('bg', bg); applyBackground(); };
 $('#bgBlur').oninput = () => { const bg = getBg(); bg.blur = +$('#bgBlur').value; store.set('bg', bg); applyBackground(); };
+$('#bgColor')?.addEventListener('input', e => setSolidBgColor(e.target.value));
+$('#bgColorHex')?.addEventListener('input', e => {
+  let val = e.target.value.trim();
+  if (!val.startsWith('#')) val = '#' + val;
+  if (/^#[0-9a-fA-F]{6}$/.test(val)) setSolidBgColor(val);
+});
+$$('#bgColorSwatches .swatch-btn').forEach(btn => {
+  btn.addEventListener('click', () => setSolidBgColor(btn.dataset.color));
+});
 $('#bgUpload').onchange = e => {
   const f = e.target.files[0]; if (!f) return;
   const img = new Image();
@@ -3943,6 +3983,9 @@ async function teamFlow(task) {
 
 /* ───────── TABS / LOG / TOAST / EXPORT ───────── */
 function switchTab(name) {
+  if (name !== 'browser') {
+    window._lastActiveTab = name;
+  }
   $$('.tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
   ['routines', 'music', 'skills', 'tasks', 'reminders', 'log', 'notes', 'extra1', 'extra2', 'browser'].forEach(t => {
     const el = $('#tab-' + t);

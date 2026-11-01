@@ -377,6 +377,10 @@
       </div>
       <div class="tabpage" id="tab-browser" hidden>
         <div class="browser-container" id="browserContainer">
+          <div class="browser-phone-notch" aria-hidden="true">
+            <span class="notch-speaker"></span>
+            <span class="notch-camera"></span>
+          </div>
           <div class="browser-nav-bar">
             <div class="browser-nav-actions">
               <button type="button" id="browserBtnBack" class="btn ghost icon-only sm" title="Voltar"><i data-lucide="chevron-left"></i></button>
@@ -389,9 +393,14 @@
               <button type="button" id="browserBtnGo" class="btn ghost icon-only sm" title="Navegar"><i data-lucide="arrow-right"></i></button>
             </div>
             <div class="browser-tool-actions">
-              <button type="button" id="browserBtnInspect" class="btn ghost icon-only sm" title="Inspecionar Elementos (Computer Use)"><i data-lucide="scan-search"></i></button>
-              <button type="button" id="browserBtnScreenshot" class="btn ghost icon-only sm" title="Capturar Tela (Screenshot)"><i data-lucide="camera"></i></button>
-              <button type="button" id="browserBtnExpand" class="btn ghost icon-only sm" title="Maximizar / Restaurar"><i data-lucide="maximize-2"></i></button>
+              <div class="browser-cu-tools">
+                <button type="button" id="browserBtnInspect" class="btn ghost icon-only sm" title="Inspecionar Elementos (Computer Use)"><i data-lucide="scan-search"></i></button>
+                <button type="button" id="browserBtnScreenshot" class="btn ghost icon-only sm" title="Capturar Tela (Screenshot)"><i data-lucide="camera"></i></button>
+              </div>
+              <div class="browser-win-tools">
+                <button type="button" id="browserBtnExpand" class="btn ghost icon-only sm" title="Ampliar (Janela horizontal grande)"><i data-lucide="maximize-2"></i></button>
+                <button type="button" id="browserBtnClose" class="btn ghost icon-only sm browser-btn-close" title="Fechar navegador"><i data-lucide="x"></i></button>
+              </div>
             </div>
           </div>
           <div class="browser-subbar">
@@ -416,6 +425,9 @@
             </div>
             <div id="browserFrameHolder" class="browser-frame-holder" hidden></div>
             <div id="browserCuOverlay" class="browser-cu-overlay"></div>
+          </div>
+          <div class="browser-phone-bottom" aria-hidden="true">
+            <span class="phone-home-pill"></span>
           </div>
         </div>
       </div>
@@ -581,6 +593,21 @@
             <option value="custom" data-i18n="set.bgOpt4">Imagem personalizada</option>
             <option value="none" data-i18n="set.bgOpt5">Nenhum (liso)</option>
           </select>
+        </label>
+        <label class="fld" id="bgColorWrap" hidden><span><span data-i18n="set.bgColor">Cor do plano de fundo</span><b id="bgColorVal" class="mono">#0d1117</b></span>
+          <div class="bg-color-picker-row">
+            <input id="bgColor" type="color" value="#0d1117" title="Escolha a cor do fundo" />
+            <input id="bgColorHex" type="text" value="#0d1117" placeholder="#000000" maxlength="7" spellcheck="false" title="Hexadecimal da cor" />
+            <div class="bg-color-swatches" id="bgColorSwatches">
+              <button type="button" class="swatch-btn" data-color="#0b0f19" title="Noite Profunda" style="background:#0b0f19"></button>
+              <button type="button" class="swatch-btn" data-color="#000000" title="Preto Puro" style="background:#000000"></button>
+              <button type="button" class="swatch-btn" data-color="#161b22" title="Grafite" style="background:#161b22"></button>
+              <button type="button" class="swatch-btn" data-color="#0f172a" title="Azul Slate" style="background:#0f172a"></button>
+              <button type="button" class="swatch-btn" data-color="#181824" title="Roxo Meia-Noite" style="background:#181824"></button>
+              <button type="button" class="swatch-btn" data-color="#22252a" title="Cinza Titânio" style="background:#22252a"></button>
+              <button type="button" class="swatch-btn" data-color="#ffffff" title="Branco Puro" style="background:#ffffff"></button>
+            </div>
+          </div>
         </label>
         <label class="fld" id="bgUploadWrap" hidden><span data-i18n="set.upload">Enviar imagem</span>
           <input id="bgUpload" type="file" accept="image/*" />
