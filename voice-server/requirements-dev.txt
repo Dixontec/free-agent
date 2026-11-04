@@ -1,0 +1,3 @@
+# Dependências de desenvolvimento (inclui STT). O app empacotado usa apenas requirements.txt.
+-r requirements.txt
+faster-whisper>=1.1

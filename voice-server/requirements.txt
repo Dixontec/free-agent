@@ -1,0 +1,5 @@
+# Runtime do TTS (Kokoro) — usado pelo app empacotado.
+# Instale com: uv pip install --python voice-server/.venv/bin/python -r voice-server/requirements.txt
+kokoro-onnx>=0.6.1
+soundfile>=0.12
+numpy>=2.0.2

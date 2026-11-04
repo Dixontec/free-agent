@@ -180,6 +180,37 @@ export const TOOLS = {
     needsApproval: false,
     renderHint: () => `<tool name="browser_screenshot"></tool>`,
   },
+  agent_create: {
+    desc: 'Criar subagente(s) com nome e instruções definidas pelo agente principal.',
+    schema: { type: 'object', properties: { name: { type: 'string' }, instructions: { type: 'string' }, icon: { type: 'string' } }, required: ['name', 'instructions'] },
+    needsApproval: false,
+    renderHint: () => `<tool name="agent_create">{"name":"Pesquisador","instructions":"..."}</tool>`,
+  },
+  agent_history: {
+    desc: 'Ler o histórico de conversa de um subagente (filtro por período).',
+    schema: { type: 'object', properties: { agent: { type: 'string' }, since: { type: 'string' }, limit: { type: 'number' } }, required: [] },
+    needsApproval: false,
+    renderHint: () => `<tool name="agent_history">{"agent":"Redator","since":"hoje"}</tool>`,
+  },
+  agent_list: { desc: 'Listar subagentes.', schema: { type: 'object', properties: {}, required: [] }, needsApproval: false, renderHint: () => `<tool name="agent_list"></tool>` },
+  agent_update: {
+    desc: 'Alterar instruções de um subagente.',
+    schema: { type: 'object', properties: { name: { type: 'string' }, instructions: { type: 'string' } }, required: ['name', 'instructions'] },
+    needsApproval: false,
+    renderHint: () => `<tool name="agent_update">{"name":"Pesquisador","instructions":"..."}</tool>`,
+  },
+  agent_delete: {
+    desc: 'Excluir subagente (confirmação via UI).',
+    schema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] },
+    needsApproval: false, // a confirmação é feita dentro de execAgentTool
+    renderHint: () => `<tool name="agent_delete">{"name":"Pesquisador"}</tool>`,
+  },
+  agent_delegate: {
+    desc: 'Delegar tarefa(s) a subagentes (paralelo); retorna resultados p/ revisão do principal.',
+    schema: { type: 'object', properties: { agent: { type: 'string' }, task: { type: 'string' }, feedback: { type: 'string' } }, required: ['agent', 'task'] },
+    needsApproval: false,
+    renderHint: () => `<tool name="agent_delegate">{"agent":"Pesquisador","task":"..."}</tool>`,
+  },
   browser_scroll: {
     desc: 'Computer Use: Rolar página do navegador para cima ou para baixo.',
     schema: { type: 'object', properties: { direction: { type: 'string' }, amount: { type: 'number' } }, required: ['direction'] },
@@ -189,7 +220,7 @@ export const TOOLS = {
 };
 
 // System enxuto: nomes + 1 linha cada + slugs (sem prompts das skills)
-export function buildToolsSection(activeSlugs) {
+export function buildToolsSection(activeSlugs, isSubagent = false) {
   const lines = [
     `- web_search(query): SÓ se pedir pesquisar/buscar/notícias/preço/clima. NUNCA do nada.`,
     `- web_open(url): ler 1 página https.`,
@@ -222,18 +253,32 @@ export function buildToolsSection(activeSlugs) {
     `- code_edit({"path","old_string","new_string"}): troca precisa (p/ mudança pequena).`,
     `- code_bash({"cmd"}): shell no projeto (exige bridge; senão negado).`,
   ];
+  if (!isSubagent) {
+    lines.push(
+      `- FORMATO EXATO p/ agentes (use sempre a tag <tool name=...>, nunca <agent_create>): <tool name="agent_create">{"name":"Redator","instructions":"Você é ...","icon":"pen-line"}</tool> — "icon" = nome lucide em inglês (bot, pen-line, megaphone, search), nunca emoji.`,
+      `- agent_create({"name","instructions","icon"}): cria subagente com as instruções que VOCÊ define (vários: {"agents":[{...},{...}]}). Só quando o usuário pedir agentes/equipe/delegar.`,
+      `- agent_history({"agent","since","limit"}): LÊ a conversa persistida de um subagente (pedidos do Prime, respostas e pedidos diretos do usuário, com horário). "since":"hoje" ou nº de horas. Sem "agent" = resumo de todos. Qualquer pergunta sobre o que um agente fez/disse/sabe/tratou → chame ANTES de responder; nunca invente.`,
+      `- agent_list: lista subagentes existentes (use antes de criar/delegar).`,
+      `- agent_update({"name","instructions"}): muda as instruções de um subagente.`,
+      `- agent_delete({"name"}): remove subagente (pede confirmação).`,
+      `- agent_delegate({"agent","task","feedback"}) ou {"tasks":[{"agent","task"},...]}: subagentes executam em paralelo e o resultado volta p/ você REVISAR. "task" deve ser autocontida. "feedback" = correção p/ refazer.`
+    );
+  }
   return `[TOOLS]\n${lines.join('\n')}\nFormato: <tool name="web_search">texto</tool> — 1 por turno. Code tools usam JSON na tag. NUNCA use JSON {"name":...} — só o formato <tool>.`;
 }
 
 export function parseToolCall(text) {
   const s = String(text || '');
-  const m = s.match(/<tool\s+name=["'](web_search|web_open|open_site|run_skill|music_search|music_download|music_play|create_task|list_tasks|complete_task|delete_task|create_note|list_notes|edit_note|delete_note|list_convs|read_conv|save_correction|browser_open|browser_inspect|browser_click|browser_type|browser_screenshot|browser_scroll|news|code_read|code_list|code_glob|code_grep|code_write|code_edit|code_bash)["']\s*>([\s\S]*?)<\/tool>/i);
+  const m = s.match(/<tool\s+name=["'](web_search|web_open|open_site|run_skill|music_search|music_download|music_play|create_task|list_tasks|complete_task|delete_task|create_note|list_notes|edit_note|delete_note|list_convs|read_conv|save_correction|browser_open|browser_inspect|browser_click|browser_type|browser_screenshot|browser_scroll|news|code_read|code_list|code_glob|code_grep|code_write|code_edit|code_bash|agent_create|agent_list|agent_update|agent_delete|agent_delegate|agent_history)["']\s*>([\s\S]*?)<\/tool>/i);
   if (m) {
     let name = m[1].toLowerCase();
     if (name === 'news') name = 'web_search'; // compat legado
-    const cap = (name.startsWith('code_') || name.startsWith('browser_')) ? 20000 : 500;
+    const cap = (name.startsWith('code_') || name.startsWith('browser_')) ? 20000 : name.startsWith('agent_') ? 8000 : 500;
     return { name, arg: m[2].trim().slice(0, cap) };
   }
+  // Alias: modelo escreveu <agent_create>{...}</agent_create> em vez de <tool name="agent_create">
+  const am = s.match(/<(agent_(?:create|list|update|delete|delegate|history))\s*>([\s\S]*?)<\/\1\s*>/i);
+  if (am) return { name: am[1].toLowerCase(), arg: am[2].trim().slice(0, 8000) };
   // Fallback: modelo emitiu tool nativa JSON em vez de <tool> (causa do Groq 400 tool_use_failed)
   try {
     const jm = s.match(/\{\s*"name"\s*:\s*"([\w-]+)"\s*,\s*"arguments"\s*:\s*(\{[\s\S]*?\})\s*\}/);
@@ -241,8 +286,8 @@ export function parseToolCall(text) {
       let name = jm[1].toLowerCase();
       if (name === 'news') name = 'web_search';
       let arg = '';
-      try { const ao = JSON.parse(jm[2]); arg = ao.query ?? ao.text ?? ao.alvo ?? ao.url ?? ao.slug ?? ''; } catch {}
-      if (name) return { name, arg: String(arg).slice(0, 500) };
+      try { const ao = JSON.parse(jm[2]); arg = /^(agent_|code_|browser_)/.test(name) ? JSON.stringify(ao) : (ao.query ?? ao.text ?? ao.alvo ?? ao.url ?? ao.slug ?? ''); } catch {}
+      if (name) return { name, arg: String(arg).slice(0, /^agent_/.test(name) ? 8000 : 500) };
     }
   } catch {}
   return null;

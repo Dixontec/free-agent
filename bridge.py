@@ -33,6 +33,87 @@ BLOCK = [
 
 MAX_BODY = 64 * 1024
 
+# ── Voz local (Kokoro TTS) ────────────────────────────────────────────────
+# O app empacotado roda o runtime embutido (resources/voice). No modo
+# desenvolvimento (serve.py) usamos vendor/voice se existir, senão o venv.
+VOICE_PORT = 8880
+_voice_proc = None
+
+
+def _voice_runtime(root):
+    models = os.path.join(root, "voice-server", "models")
+    vendor = os.path.join(root, "vendor", "voice")
+    py = os.path.join(vendor, "python", "bin", "python3")
+    script = os.path.join(vendor, "voice_server.py")
+    if os.name == "nt":
+        py = os.path.join(vendor, "python", "python.exe")
+    if os.path.exists(script) and os.path.exists(py):
+        return {"py": py, "script": script, "site": os.path.join(vendor, "py"),
+                "models": models, "bundled": True}
+    venv_py = os.path.join(root, "voice-server", ".venv", "bin", "python")
+    if os.name == "nt":
+        venv_py = os.path.join(root, "voice-server", ".venv", "Scripts", "python.exe")
+    return {"py": venv_py, "script": os.path.join(root, "voice-server", "voice_server.py"),
+            "site": "", "models": models, "bundled": False}
+
+
+def _voice_running():
+    import socket
+    s = socket.socket()
+    s.settimeout(0.35)
+    try:
+        return s.connect_ex(("127.0.0.1", VOICE_PORT)) == 0
+    finally:
+        s.close()
+
+
+def _voice_status(root):
+    rt = _voice_runtime(root)
+    onnx = os.path.join(rt["models"], "kokoro-v1.0.onnx")
+    voices = os.path.join(rt["models"], "voices-v1.0.bin")
+    return {
+        "ok": True,
+        "modelsExist": os.path.exists(onnx) and os.path.exists(voices),
+        "bundled": rt["bundled"],
+        "runtime": os.path.exists(rt["py"]) and os.path.exists(rt["script"]),
+        "running": _voice_running(),
+        "modelsDir": rt["models"],
+        "voices": [],
+    }
+
+
+def _voice_start(root):
+    global _voice_proc
+    if _voice_running():
+        return True
+    rt = _voice_runtime(root)
+    onnx = os.path.join(rt["models"], "kokoro-v1.0.onnx")
+    voices = os.path.join(rt["models"], "voices-v1.0.bin")
+    if not (os.path.exists(onnx) and os.path.exists(voices)
+            and os.path.exists(rt["py"]) and os.path.exists(rt["script"])):
+        return False
+    env = dict(os.environ)
+    env.update({
+        "KOKORO_ONNX": onnx,
+        "KOKORO_VOICES": voices,
+        "PYTHONNOUSERSITE": "1",
+        "PYTHONDONTWRITEBYTECODE": "1",
+    })
+    if rt["site"]:
+        env["PYTHONPATH"] = rt["site"]
+    log_path = os.path.join(root, "voice-server", ".voice.log")
+    try:
+        log = open(log_path, "ab")
+    except OSError:
+        log = subprocess.DEVNULL
+    _voice_proc = subprocess.Popen(
+        [rt["py"], rt["script"], "--port", str(VOICE_PORT), "--no-stt"],
+        cwd=os.path.dirname(rt["script"]), env=env,
+        stdin=subprocess.DEVNULL, stdout=log, stderr=log,
+    )
+    return True
+
+
 # MIME p/ servir os arquivos do app (serve.py / bridge em modo servidor único)
 MIME = {
     ".html": "text/html; charset=utf-8", ".htm": "text/html; charset=utf-8",
@@ -241,6 +322,8 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(body)
         elif p == "/tg-status":
             return self._json(tg_status())
+        elif p == "/api/kokoro/status":
+            return self._json(_voice_status(self.server.root))
         else:
             return self._serve_static()
 
@@ -274,6 +357,16 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = urlparse(self.path).path
+        if path in ("/api/kokoro/start-server", "/api/kokoro/download"):
+            st = _voice_status(self.server.root)
+            started = _voice_start(self.server.root) if st["modelsExist"] else False
+            return self._json({
+                "ok": started,
+                "started": started,
+                "bundled": st["bundled"],
+                "modelsExist": st["modelsExist"],
+                "error": None if started else "runtime/modelos de voz indisponíveis — rode npm run voice:models",
+            }, 200 if started else 409)
         if path not in ("/exec", "/ytsearch", "/tg", "/tg-start", "/tg-stop", "/tg-inbox", "/tg-send"):
             self.send_error(404)
             return

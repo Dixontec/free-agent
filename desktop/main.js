@@ -17,32 +17,110 @@ const PORTA = 47811;              // fixa de propósito (origem estável p/ loca
 const RAIZ = path.join(__dirname, '..');
 const ORIGEM = `http://127.0.0.1:${PORTA}`;
 
+const VOZ_PORTA = 8880;           // voice-server local (Kokoro TTS)
+const IS_WIN = process.platform === 'win32';
+
 let win = null;
 let server = null;
 let voiceProcess = null;
 
+/* Runtime de voz:
+   - empacotado → resources/voice (CPython portátil + site-packages + modelos)
+   - dev        → vendor/voice (gerado por `npm run voice:bundle`) ou venv do repo */
+function runtimeDeVoz() {
+  const modelosRepo = path.join(RAIZ, 'voice-server', 'models');
+  const dir = app.isPackaged ? path.join(process.resourcesPath, 'voice') : path.join(RAIZ, 'vendor', 'voice');
+  const py = path.join(dir, 'python', IS_WIN ? 'python.exe' : path.join('bin', 'python3'));
+  const script = path.join(dir, 'voice_server.py');
+  const site = path.join(dir, 'py');
+  if (fs.existsSync(py) && fs.existsSync(script) && fs.existsSync(site)) {
+    return {
+      bundled: true,
+      py,
+      script,
+      site,
+      models: app.isPackaged ? path.join(dir, 'models') : modelosRepo,
+      args: ['--no-stt'],
+    };
+  }
+  return {
+    bundled: false,
+    py: resolvePythonBinary(),
+    script: path.join(RAIZ, 'voice-server', 'voice_server.py'),
+    site: '',
+    models: modelosRepo,
+    args: [],
+  };
+}
+
 function resolvePythonBinary() {
-  const isWin = process.platform === 'win32';
   const candidates = [
-    isWin ? path.join(RAIZ, 'voice-server', '.venv', 'Scripts', 'python.exe') : path.join(RAIZ, 'voice-server', '.venv', 'bin', 'python'),
-    isWin ? path.join(RAIZ, '.venv', 'Scripts', 'python.exe') : path.join(RAIZ, '.venv', 'bin', 'python'),
+    IS_WIN ? path.join(RAIZ, 'voice-server', '.venv', 'Scripts', 'python.exe') : path.join(RAIZ, 'voice-server', '.venv', 'bin', 'python'),
+    IS_WIN ? path.join(RAIZ, '.venv', 'Scripts', 'python.exe') : path.join(RAIZ, '.venv', 'bin', 'python'),
   ];
   for (const c of candidates) {
     if (fs.existsSync(c)) return c;
   }
-  return isWin ? 'python' : 'python3';
+  return IS_WIN ? 'python' : 'python3';
 }
 
-function iniciaServidorVoz() {
-  const scriptPath = path.join(RAIZ, 'voice-server', 'voice_server.py');
-  if (!fs.existsSync(scriptPath)) return;
+function vozJaRodando() {
+  return new Promise((resolve) => {
+    const s = require('net').connect(VOZ_PORTA, '127.0.0.1');
+    s.setTimeout(400);
+    s.once('connect', () => { s.destroy(); resolve(true); });
+    s.once('timeout', () => { s.destroy(); resolve(false); });
+    s.once('error', () => resolve(false));
+  });
+}
 
-  const pythonBin = resolvePythonBinary();
+let voiceStartPromise = null;
+
+function iniciaServidorVoz() {
+  if (voiceProcess) return Promise.resolve();
+  if (!voiceStartPromise) {
+    voiceStartPromise = iniciarVozUnica().finally(() => { voiceStartPromise = null; });
+  }
+  return voiceStartPromise;
+}
+
+async function iniciarVozUnica() {
+  if (await vozJaRodando()) {
+    console.log('[voice-server] já há um servidor de voz em 127.0.0.1:' + VOZ_PORTA);
+    return;
+  }
+
+  const rt = runtimeDeVoz();
+  if (!fs.existsSync(rt.script)) return;
+  const onnx = path.join(rt.models, 'kokoro-v1.0.onnx');
+  const voices = path.join(rt.models, 'voices-v1.0.bin');
+  if (!fs.existsSync(onnx) || !fs.existsSync(voices)) {
+    console.warn('[voice-server] modelos Kokoro ausentes em', rt.models);
+    return;
+  }
+
+  let logFd = 'ignore';
   try {
-    voiceProcess = spawn(pythonBin, [scriptPath], {
-      cwd: path.join(RAIZ, 'voice-server'),
+    const logPath = path.join(app.getPath('userData'), 'voice-server.log');
+    logFd = fs.openSync(logPath, 'a');
+  } catch {}
+
+  const env = {
+    ...process.env,
+    KOKORO_ONNX: onnx,
+    KOKORO_VOICES: voices,
+    KOKORO_LANG: process.env.KOKORO_LANG || 'pt-br',
+    PYTHONNOUSERSITE: '1',
+    PYTHONDONTWRITEBYTECODE: '1',
+  };
+  if (rt.site) env.PYTHONPATH = rt.site;
+
+  try {
+    voiceProcess = spawn(rt.py, [rt.script, '--port', String(VOZ_PORTA), ...rt.args], {
+      cwd: path.dirname(rt.script),
       detached: false,
-      stdio: 'ignore',
+      stdio: ['ignore', logFd, logFd],
+      env,
     });
 
     voiceProcess.on('error', (err) => {
@@ -50,11 +128,14 @@ function iniciaServidorVoz() {
       voiceProcess = null;
     });
 
-    voiceProcess.on('exit', () => {
+    voiceProcess.on('exit', (code) => {
+      if (code) console.warn('[voice-server] encerrou com código', code);
       voiceProcess = null;
     });
   } catch (err) {
     console.warn('[voice-server] Erro ao spawnar servidor de voz:', err.message);
+  } finally {
+    if (typeof logFd === 'number') { try { fs.closeSync(logFd); } catch {} }
   }
 }
 
@@ -75,7 +156,12 @@ function encerraServidorVoz() {
 
 function sobeServidor() {
   return new Promise((resolve, reject) => {
-    server = createStaticServer(RAIZ, { onKokoroDownloaded: iniciaServidorVoz });
+    const rt = runtimeDeVoz();
+    server = createStaticServer(RAIZ, {
+      onKokoroDownloaded: iniciaServidorVoz,
+      modelsDir: rt.models,
+      bundled: rt.bundled,
+    });
     server.once('error', reject);
     server.listen(PORTA, '127.0.0.1', () => resolve());
   });

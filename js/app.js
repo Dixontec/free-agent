@@ -6,6 +6,7 @@
 'use strict';
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
+let _agentChatId = null; // id do subagente cuja conversa está aberta na área principal (null = chat do Prime)
 const store = {
   get(k, fb) { try { const v = localStorage.getItem('nexus:' + k); return v ? JSON.parse(v) : fb; } catch { return fb; } },
   set(k, v) { localStorage.setItem('nexus:' + k, JSON.stringify(v)); }
@@ -205,6 +206,8 @@ function coreWinDone(win, okText, tone = 'ok') {
 const PROVIDERS = {
   groq:      { label: 'Groq', url: 'https://api.groq.com/openai/v1/chat/completions', kind: 'openai',
                models: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768', 'gemma2-9b-it'] },
+  deepseek:  { label: 'DeepSeek', url: 'https://api.deepseek.com/chat/completions', kind: 'openai',
+               models: ['deepseek-chat', 'deepseek-reasoner'] },
   openai:    { label: 'OpenAI', url: 'https://api.openai.com/v1/chat/completions', kind: 'openai',
                models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'o3-mini', 'o1-mini'] },
   gemini:    { label: 'Gemini', url: 'https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent', kind: 'gemini',
@@ -220,7 +223,7 @@ const PROVIDERS = {
 };
 const cfg = Object.assign({ provider: 'groq', model: 'llama-3.3-70b-versatile', baseUrl: '', temperature: 0.7, maxTokens: 2048, lang: 'pt-BR' },
   store.get('cfg', {}));
-const keys = Object.assign({ groq: '', openai: '', gemini: '', anthropic: '', openrouter: '', ollama: '', lmstudio: '' }, store.get('keys', {}));
+const keys = Object.assign({ groq: '', deepseek: '', openai: '', gemini: '', anthropic: '', openrouter: '', ollama: '', lmstudio: '' }, store.get('keys', {}));
 
 /* ── SELETOR RÁPIDO DE MODELO (dropdown custom no chat) ── */
 let mqList = [];
@@ -308,7 +311,7 @@ function refreshModels() {
 function refreshKeyField() {
   const p = $('#provider').value;
   $('#apiKey').value = keys[p] || '';
-  $('#apiKey').placeholder = (p === 'ollama' || p === 'lmstudio') ? 'opcional local — LM Studio aceita vazio ou lm-studio' : (p === 'gemini' ? 'AIza…' : p === 'groq' ? 'gsk_…' : 'sk-…');
+  $('#apiKey').placeholder = (p === 'ollama' || p === 'lmstudio') ? 'opcional local — LM Studio aceita vazio ou lm-studio' : (p === 'gemini' ? 'AIza…' : p === 'groq' ? 'gsk_…' : (p === 'deepseek' ? 'sk-… (DeepSeek)' : 'sk-…'));
 }
 $('#provider').value = cfg.provider || 'groq';
 refreshModels(); refreshKeyField();
@@ -460,10 +463,14 @@ async function callLLM(messages, opts = {}) {
     else if (!/\/chat\/completions$/.test(base)) base += '/chat/completions';
     url = base;
   }
-  const bodyBase = { model: cfg.model, temperature: temp, max_tokens: max, messages };
+  const bodyBase = { model: cfg.model, max_tokens: max, messages };
+  if (cfg.model !== 'deepseek-reasoner') bodyBase.temperature = temp;
   // Só anuncia tools quando há indício de necessidade — zera tool desnecessária.
   // Quando anuncia, usa tool_choice auto p/ Groq nunca dar 400 tool_choice-none.
-  if (needsTool && (p === 'groq' || p === 'openai' || p === 'openrouter')) { bodyBase.tools = NATIVE_TOOLS; bodyBase.tool_choice = 'auto'; }
+  if (needsTool && (p === 'groq' || p === 'openai' || p === 'openrouter' || (p === 'deepseek' && cfg.model !== 'deepseek-reasoner'))) {
+    bodyBase.tools = NATIVE_TOOLS;
+    bodyBase.tool_choice = 'auto';
+  }
   const r = await fetch(url, { method: 'POST', headers,
     body: JSON.stringify(bodyBase) });
   if (!r.ok) {
@@ -513,7 +520,7 @@ async function callLLM(messages, opts = {}) {
     }
   } catch {}
   noteUsage(j.usage?.prompt_tokens, j.usage?.completion_tokens);
-  return j.choices?.[0]?.message?.content || '(vazio)';
+  return j.choices?.[0]?.message?.content || j.choices?.[0]?.message?.reasoning_content || '(vazio)';
 }
 $('#btnTest').onclick = async () => {
   $('#btnSaveKeys').click();
@@ -782,6 +789,7 @@ function addHtml(role, html, extra = '') {
   return d;
 }
 function renderHistory() {
+  if (_agentChatId) closeAgentChat();
   $('#messages').innerHTML = '';
   history.forEach(m => addMsg(m.role === 'user' ? 'user' : 'ai', m.content));
 }
@@ -1033,6 +1041,10 @@ $('#composer').addEventListener('submit', async e => {
   const text = $('#input').value.trim();
   if (!text) return;
   $('#input').value = ''; $('#input').style.height = 'auto';
+  if (_agentChatId) { // visão de subagente aberta: o composer fala direto com ele
+    const agv = getAgents().find(a => a.id === _agentChatId);
+    if (agv) { await chatWithSubagent(agv, text); return; }
+  }
   addMsg('user', text);
   history.push({ role: 'user', content: text });
   maybeTitle(text);
@@ -1048,7 +1060,7 @@ $('#composer').addEventListener('submit', async e => {
   /* ── v2.1: executa → verifica conclusão → corrige pendência → entrega ── */
   if (window.__runReAct) {
     try {
-      const TOOL_LABEL = { web_search: 'Buscando fontes', web_open: 'Lendo página', open_site: 'Abrindo site', run_skill: 'Executando skill', music_search: 'Buscando música livre', music_download: 'Baixando MP3', music_play: 'Tocando música', create_task: 'Criando tarefa', list_tasks: 'Lendo tarefas', complete_task: 'Concluindo tarefa', delete_task: 'Deletando tarefa', create_note: 'Criando nota', list_notes: 'Lendo notas', edit_note: 'Editando nota', delete_note: 'Deletando nota', list_convs: 'Listando conversas', read_conv: 'Lendo conversa', save_correction: 'Salvando correção', browser_open: 'Navegando no browser', browser_inspect: 'Inspecionando página', browser_click: 'Clicando no browser', browser_type: 'Digitando no browser', browser_screenshot: 'Capturando tela', browser_scroll: 'Rolando página', news: 'Lendo notícias', code_read: 'Lendo arquivo', code_list: 'Listando pasta', code_glob: 'Buscando arquivos', code_grep: 'Buscando texto', code_write: 'Escrevendo arquivo', code_edit: 'Editando arquivo', code_bash: 'Executando comando', code_undo: 'Desfazendo' };
+      const TOOL_LABEL = { web_search: 'Buscando fontes', web_open: 'Lendo página', open_site: 'Abrindo site', run_skill: 'Executando skill', music_search: 'Buscando música livre', music_download: 'Baixando MP3', music_play: 'Tocando música', create_task: 'Criando tarefa', list_tasks: 'Lendo tarefas', complete_task: 'Concluindo tarefa', delete_task: 'Deletando tarefa', create_note: 'Criando nota', list_notes: 'Lendo notas', edit_note: 'Editando nota', delete_note: 'Deletando nota', list_convs: 'Listando conversas', read_conv: 'Lendo conversa', save_correction: 'Salvando correção', browser_open: 'Navegando no browser', browser_inspect: 'Inspecionando página', browser_click: 'Clicando no browser', browser_type: 'Digitando no browser', browser_screenshot: 'Capturando tela', browser_scroll: 'Rolando página', news: 'Lendo notícias', code_read: 'Lendo arquivo', code_list: 'Listando pasta', code_glob: 'Buscando arquivos', code_grep: 'Buscando texto', code_write: 'Escrevendo arquivo', code_edit: 'Editando arquivo', code_bash: 'Executando comando', code_undo: 'Desfazendo', agent_create: 'Criando subagente', agent_list: 'Listando agentes', agent_update: 'Atualizando agente', agent_delete: 'Excluindo agente', agent_delegate: 'Delegando aos subagentes', agent_history: 'Lendo conversa do agente' };
       const runAw = agentWin({ icon: 'bot', title: 'Agente · ' + text.slice(0, 60), body: `<div class="awline">${ic('circle-dot')}<span>Iniciando: <b>${escapeHtml(text.slice(0, 100))}</b></span></div>` });
       const execToolReal = async (name, arg) => {
         const label = TOOL_LABEL[name] || name;
@@ -1104,7 +1116,7 @@ $('#composer').addEventListener('submit', async e => {
       const v2 = await window.__runReAct(text, { history, cfg, callLLM, getSkills, uiConfirm, execToolReal, onStatus, workspace: wsName });
       $('#typing').hidden = true;
       // Rede de segurança final: nunca exibe <tool> crua como resposta.
-      if (/<tool\s+name=/.test(v2.answer || '')) {
+      if (/<tool\s+name=|<\/?agent_(create|list|update|delete|delegate|history)\b/.test(v2.answer || '')) {
         v2.answer = 'Encontrei os dados, mas o modelo devolveu a chamada em vez do resumo. Toque em "Nova" e pergunte de novo — ou use /news tecnologia (funciona sem IA).';
         v2.ok = false; v2.pending = [{ reason: 'tool crua filtrada na exibição' }];
       }
@@ -1142,7 +1154,7 @@ $('#composer').addEventListener('submit', async e => {
     const tool = parseToolCall(out);
     let via = `${PROVIDERS[cfg.provider].label} · ${escapeHtml(cfg.model)}${skill ? ' · skill ' + escapeHtml(skill.title) : ''}`;
     if (tool) {
-      const TOOL_PT = { web_search: 'Buscando fontes', web_open: 'Lendo página', open_site: 'Abrindo site', run_skill: 'Executando skill', music_search: 'Buscando música', music_download: 'Baixando MP3', music_play: 'Tocando música', create_task: 'Criando tarefa', list_tasks: 'Lendo tarefas', complete_task: 'Concluindo tarefa', delete_task: 'Deletando tarefa', create_note: 'Criando nota', list_notes: 'Lendo notas', edit_note: 'Editando nota', delete_note: 'Deletando nota', list_convs: 'Listando conversas', read_conv: 'Lendo conversa', save_correction: 'Salvando correção', news: 'Lendo notícias', code_read: 'Lendo arquivo', code_list: 'Listando pasta', code_glob: 'Buscando arquivos', code_grep: 'Buscando texto', code_write: 'Escrevendo arquivo', code_edit: 'Editando arquivo', code_bash: 'Executando comando', code_undo: 'Desfazendo' };
+      const TOOL_PT = { web_search: 'Buscando fontes', web_open: 'Lendo página', open_site: 'Abrindo site', run_skill: 'Executando skill', music_search: 'Buscando música', music_download: 'Baixando MP3', music_play: 'Tocando música', create_task: 'Criando tarefa', list_tasks: 'Lendo tarefas', complete_task: 'Concluindo tarefa', delete_task: 'Deletando tarefa', create_note: 'Criando nota', list_notes: 'Lendo notas', edit_note: 'Editando nota', delete_note: 'Deletando nota', list_convs: 'Listando conversas', read_conv: 'Lendo conversa', save_correction: 'Salvando correção', news: 'Lendo notícias', code_read: 'Lendo arquivo', code_list: 'Listando pasta', code_glob: 'Buscando arquivos', code_grep: 'Buscando texto', code_write: 'Escrevendo arquivo', code_edit: 'Editando arquivo', code_bash: 'Executando comando', code_undo: 'Desfazendo', agent_create: 'Criando subagente', agent_list: 'Listando agentes', agent_update: 'Atualizando agente', agent_delete: 'Excluindo agente', agent_delegate: 'Delegando aos subagentes', agent_history: 'Lendo conversa do agente' };
       const tlabel = TOOL_PT[tool.name] || tool.name;
       setCoreState(tlabel, `${tool.name}: ${tool.arg.slice(0, 90)}`);
       const twin = coreWindow({ icon: 'globe', title: tlabel, body: `<b>${escapeHtml(tool.name)}</b> · ${escapeHtml(tool.arg.slice(0, 120))}` });
@@ -2165,6 +2177,8 @@ function saveCorrection(text) {
   return n;
 }
 window.__agentMemoryFn = memBlock;
+window.__mainAgentFn = () => { try { const m = getMain(); return { name: m.name, personality: m.personality }; } catch { return { name: 'Prime', personality: '' }; } };
+window.__getAgentsList = () => { try { return getAgents(); } catch { return []; } };
 function viewAgentMemory() {
   const n = ensureMemoryNote();
   try { switchTab('notes'); } catch {}
@@ -2257,7 +2271,7 @@ setInterval(() => {
 
 /* ───────── MODELOS DA API (via chave) ───────── */
 async function listModels(p, key) {
-  if (p === 'groq' || p === 'openai') {
+  if (p === 'groq' || p === 'openai' || p === 'deepseek') {
     const r = await fetch(PROVIDERS[p].url.replace('/chat/completions', '/models'), { headers: { Authorization: 'Bearer ' + key } });
     if (!r.ok) throw new Error('HTTP ' + r.status + ' — confira a chave');
     return ((await r.json()).data || []).map(m => m.id).filter(Boolean).sort();
@@ -3344,7 +3358,7 @@ const TOOLS_SYS = `\n\n[FERRAMENTAS — web + música local. REGRA DE OURO: se d
 Ao CRIAR código (landing page, site, script), SEMPRE invoque code_write — NUNCA cole o arquivo inteiro no chat.]`;
 function parseToolCall(text) {
   const s = String(text || '');
-  const m = s.match(/<tool\s+name=["'](web_search|web_open|news|open_site|run_skill|music_search|music_download|music_play|create_task|list_tasks|complete_task|delete_task|create_note|list_notes|edit_note|delete_note|list_convs|read_conv|save_correction|code_read|code_list|code_glob|code_grep|code_write|code_edit|code_bash)["']\s*>([\s\S]*?)<\/tool>/i);
+  const m = s.match(/<tool\s+name=["'](web_search|web_open|news|open_site|run_skill|music_search|music_download|music_play|create_task|list_tasks|complete_task|delete_task|create_note|list_notes|edit_note|delete_note|list_convs|read_conv|save_correction|code_read|code_list|code_glob|code_grep|code_write|code_edit|code_bash|agent_create|agent_list|agent_update|agent_delete|agent_delegate|agent_history)["']\s*>([\s\S]*?)<\/tool>/i);
   if (m) { const nm = m[1].toLowerCase(); return { name: nm, arg: m[2].trim().slice(0, nm.startsWith('code_') ? 20000 : 500) }; }
   try {
     const jm = s.match(/\{\s*"name"\s*:\s*"([\w-]+)"\s*,\s*"arguments"\s*:\s*(\{[\s\S]*?\})\s*\}/);
@@ -3481,6 +3495,7 @@ async function toolOpen(url) {
 const _searchCache = { q: '', txt: '', ts: 0 };
 async function execTool(name, arg, step) {
   const say = s => { try { step && step(s); } catch {} };
+  if (name.startsWith('agent_')) return await execAgentTool(name, arg, say);
   if (name === 'web_search') {
     const q = String(arg || '').trim().slice(0, 200);
     const nq = q.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -3846,11 +3861,18 @@ try { bindCodeAgent(); } catch {} // após uiConfirm existir (ask abre modal de 
 
 /* ───────── AGENTES ───────── */
 function getAgents() {
-  const a = store.get('agents', null) || [];
+  let a = store.get('agents', null);
+  if (!Array.isArray(a) || !a.length) {
+    a = [
+      { id: 'secretaria', icon: 'clipboard-list', name: 'Secretária', personality: 'Você é a Secretária do Free Agent. Resume e organiza memórias, tarefas, notas e informações do dia com clareza e objetividade.' },
+      { id: 'briefing', icon: 'sunrise', name: 'Briefing', personality: 'Você faz o briefing matinal e sintetiza prioridades, tarefas do dia e avisos importantes de forma direta e acionável.' }
+    ];
+    store.set('agents', a);
+  }
   return a.map(x => ({ icon: 'bot', busy: false, ...x }));
 }
 function getMain() { return Object.assign({ name: 'Prime', personality: 'Você é o agente principal. Coordena a equipe com autonomia e responde em português.' }, store.get('mainAgent', {})); }
-function saveAgents(a) { store.set('agents', a); renderAgents(); }
+function saveAgents(a) { store.set('agents', a); renderAgents(); if (_agentChatId) renderAgentChat(false); }
 function setAgentBusy(id, val) {
   const all = getAgents();
   const ix = all.findIndex(x => x.id === id);
@@ -3864,9 +3886,19 @@ function renderAgents() {
   const m = getMain();
   const mc = $('#mainAgentCard');
   if (mc) {
-    mc.innerHTML = `<div class="main-agent"><span class="aic">${ic('crown')}</span><div class="agent-txt" style="flex:1;min-width:0"><b>${escapeHtml(m.name)}</b><small>${escapeHtml((m.personality || '').slice(0, 60) || 'sem personalidade definida')}</small></div><button class="iconbtn" id="btnEditMain" title="Editar principal">${ic('pencil')}</button></div>`;
+    const isPrimeActive = !_agentChatId;
+    mc.innerHTML = `<div class="main-agent${isPrimeActive ? ' active' : ''}" style="cursor:pointer;" title="Conversa do ${escapeHtml(m.name)}"><span class="aic">${ic('crown')}</span><div class="agent-txt" style="flex:1;min-width:0"><b>${escapeHtml(m.name)}</b><small>${escapeHtml((m.personality || '').slice(0, 60) || 'sem personalidade definida')}</small></div><button class="iconbtn" id="btnEditMain" title="Editar principal">${ic('pencil')}</button></div>`;
+    const cardEl = mc.querySelector('.main-agent');
+    if (cardEl) {
+      cardEl.onclick = ev => {
+        if (!ev.target.closest('#btnEditMain')) {
+          closeAgentChat();
+        }
+      };
+    }
     const eb = $('#btnEditMain');
-    if (eb) eb.onclick = () => {
+    if (eb) eb.onclick = (ev) => {
+      ev.stopPropagation();
       const mm = getMain();
       $('#mainAgentForm').hidden = false;
       $('#mName').value = mm.name; $('#mPerson').value = mm.personality;
@@ -3877,8 +3909,10 @@ function renderAgents() {
     box.innerHTML = '';
     getAgents().forEach(a => {
       const d = document.createElement('div');
-      d.className = 'agent' + (a.busy ? ' busy' : '');
+      d.className = 'agent' + (a.busy ? ' busy' : '') + (_agentChatId === a.id ? ' active' : '');
       d.innerHTML = `<span class="aic">${ic(a.icon || 'bot')}</span><div class="agent-txt"><b>${escapeHtml(a.name)}</b><small>${a.busy ? 'ocupado…' : escapeHtml((a.personality || '').slice(0, 56))}</small></div><span class="adot"></span><button class="iconbtn" data-use="${a.id}" title="Usar no chat">@</button><button class="iconbtn" data-edit="${a.id}" title="Editar">${ic('pencil')}</button><button class="iconbtn danger" data-del="${a.id}" title="Excluir">${ic('trash-2')}</button>`;
+      d.style.cursor = 'pointer'; d.title = 'Ver conversa e falar direto com ' + a.name;
+      d.onclick = ev => { if (!ev.target.closest('button')) openAgentChat(a.id); };
       box.appendChild(d);
     });
     $$('#agentList [data-use]').forEach(b => b.onclick = () => {
@@ -3889,7 +3923,7 @@ function renderAgents() {
     $$('#agentList [data-del]').forEach(b => b.onclick = async () => {
       const a = getAgents().find(x => x.id === b.dataset.del);
       if (await uiConfirm('Excluir agente', `Remover "${a ? a.name : ''}" da equipe?`, 'Excluir')) {
-        saveAgents(getAgents().filter(x => x.id !== b.dataset.del));
+        saveAgents(getAgents().filter(x => x.id !== b.dataset.del)); dropAgentLog(b.dataset.del);
       }
     });
   }
@@ -3951,6 +3985,304 @@ async function runAgent(agent, task) {
     if (agent.id) setAgentBusy(agent.id, false);
     coreIdle();
   }
+}
+/* ───────── SUBAGENTES CONTROLADOS PELO AGENTE PRINCIPAL ─────────
+   O principal (loop ReAct) usa agent_create/agent_update/agent_delete/agent_list/agent_delegate.
+   Subagentes rodam 1 chamada de LLM com as instruções definidas pelo principal (sem tools,
+   logo não criam outros agentes). O resultado volta como saída da tool p/ o principal REVISAR. */
+const AGENT_MAX = 12;
+const normAg = s => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+function findAgentLoose(n) {
+  let k = normAg(n);
+  if (!k) return null;
+  k = k.replace(/^(o|a|os|as)-/, '');
+  const all = getAgents();
+  return all.find(a => normAg(a.name) === k || normAg(a.id) === k)
+    || all.find(a => normAg(a.name).replace(/^(o|a|os|as)-/, '') === k)
+    || all.find(a => normAg(a.name).includes(k) || k.includes(normAg(a.name)))
+    || null;
+}
+function parseAgentArg(arg) {
+  let s = String(arg || '').trim();
+  s = s.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+  try {
+    const o = JSON.parse(s);
+    if (o && typeof o === 'object') return o;
+  } catch {}
+  const jm = s.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
+  if (jm) {
+    try {
+      const o = JSON.parse(jm[1]);
+      if (o && typeof o === 'object') return o;
+    } catch {}
+  }
+  const colonMatch = s.match(/^([\wÀ-ú\s-]+)[:\-\u2014]\s*([\s\S]+)$/);
+  if (colonMatch) {
+    return { agent: colonMatch[1].trim(), task: colonMatch[2].trim() };
+  }
+  const agM = s.match(/agent["':\s]+([^,\n}]+)/i);
+  const taskM = s.match(/task["':\s]+([^}\n]+)/i);
+  if (agM && taskM) {
+    return { agent: agM[1].replace(/["']/g, '').trim(), task: taskM[1].replace(/["']/g, '').trim() };
+  }
+  return { text: s };
+}
+/* Histórico por agente (persistente): {from:'prime'|'agent'|'user', text, ts}. Base da tela "conversa do agente". */
+function getAgentLog(id) { return (store.get('agentLogs', {}) || {})[id] || []; }
+function logAgent(id, from, text, extra = {}) {
+  const all = store.get('agentLogs', {}) || {};
+  const arr = all[id] || [];
+  arr.push({ from, text: String(text || '').slice(0, 6000), ts: Date.now(), ...extra });
+  all[id] = arr.slice(-80);
+  try { store.set('agentLogs', all); } catch {}
+  if (_agentChatId === id) renderAgentChat();
+}
+function dropAgentLog(id) {
+  const all = store.get('agentLogs', {}) || {}; delete all[id]; store.set('agentLogs', all);
+  if (_agentChatId === id) closeAgentChat();
+}
+function agentChatMsgs(ag, who, userContent) {
+  const mn = getMain().name;
+  const sys = `${ag.personality || 'Seja útil.'}\nVocê é o subagente "${ag.name}" da equipe do agente principal ${mn}. Responda em ${PL()}. Cumpra SÓ o que foi pedido, de forma completa e objetiva. Não invente dados, links ou fontes; se faltar informação, diga exatamente o que falta. Quem fala com você pode ser o ${mn} (delegação) ou o próprio usuário (pedido direto) — o rótulo [${mn}] ou [Usuário] no início da mensagem indica quem é.`;
+  const hist = getAgentLog(ag.id).slice(-10).map(e => e.from === 'agent'
+    ? { role: 'assistant', content: e.text }
+    : { role: 'user', content: `[${e.from === 'prime' ? mn : 'Usuário'}] ${e.text}` });
+  return [{ role: 'system', content: sys }, ...hist, { role: 'user', content: `[${who === 'prime' ? mn : 'Usuário'}] ${userContent}` }];
+}
+async function runSubagentTask(ag, task, feedback = '') {
+  setAgentBusy(ag.id, true);
+  const mn = getMain().name;
+  const win = agentWin({ icon: ag.icon || 'bot', title: `${ag.name} · ${String(task).slice(0, 50)}`, body: `<div class="awline">${ic('circle-dot')}<span>Delegado pelo ${escapeHtml(mn)}: <b>${escapeHtml(String(task).slice(0, 140))}</b></span></div>${feedback ? `<div class="awline">${ic('wrench')}<span>Revisão: ${escapeHtml(String(feedback).slice(0, 140))}</span></div>` : ''}` });
+  const userMsg = String(task) + (feedback ? `\n\n[REVISÃO sobre sua entrega anterior — corrija conforme abaixo]\n${feedback}` : '');
+  const sent = agentChatMsgs(ag, 'prime', userMsg);   // histórico lido ANTES de registrar a nova mensagem
+  logAgent(ag.id, 'prime', userMsg, feedback ? { review: true } : {});
+  try {
+    awStep(win, `<div class="awline">${ic('chevron-right')}<span>Consultando ${escapeHtml(cfg.model)}…</span></div>`);
+    let out = '';
+    if (window.__runReAct) {
+      const subHistory = sent.slice(1, -1);
+      const subExecTool = async (name, arg) => {
+        if (/^agent_(create|update|delete|delegate)$/.test(name)) {
+          return `BLOQUEADO: Apenas o ${mn} pode criar e gerenciar subagentes. Cumpra a sua tarefa usando as outras ferramentas (web_search, skills, notas, tarefas, code, etc.).`;
+        }
+        awStep(win, `<div class="awline">${ic('chevron-right')}<span>${escapeHtml(name)}: <b>${escapeHtml(String(arg || '').slice(0, 80))}</b></span></div>`);
+        return await execTool(name, arg, s => awStep(win, `<div class="awline">${ic('chevron-right')}<span>${escapeHtml(s)}</span></div>`));
+      };
+      const v = await window.__runReAct(userMsg, {
+        history: subHistory,
+        cfg,
+        callLLM,
+        getSkills,
+        uiConfirm,
+        execToolReal: subExecTool,
+        onStatus: st => {
+          if (st.phase === 'tool') awStep(win, `<div class="awline">${ic('chevron-right')}<span>Executando <b>${escapeHtml(st.tool)}</b>…</span></div>`);
+        },
+        agent: ag,
+        workspace: (await getWorkDir(false).catch(() => null))?.name
+      });
+      out = v.answer || '(sem resposta)';
+    } else {
+      out = await Promise.race([callLLM(sent), new Promise((_, rej) => setTimeout(() => rej(new Error('subagente excedeu 60s')), 60000))]);
+    }
+    trackLLM(sent, out);
+    logAgent(ag.id, 'agent', out);
+    awDone(win, `Concluído — entregue ao ${mn}: ${String(out).slice(0, 80)}…`);
+    log(`Subagente ${ag.name}: ${String(task).slice(0, 60)}`, 'ok');
+    return `[RESULTADO DO AGENTE ${ag.name}]\n${out}`;
+  } catch (e) {
+    logAgent(ag.id, 'agent', `⚠ Falhou: ${e.message}`, { error: true });
+    awDone(win, 'Falhou: ' + String(e.message).slice(0, 100));
+    return `[FALHA DO AGENTE ${ag.name}] ${e.message}`;
+  } finally { setAgentBusy(ag.id, false); }
+}
+/* ── Conversa do subagente: aparece NA área principal do chat (mesmo visual do Prime) ──
+   #messages (Prime) fica oculto e intacto; #agentMessages mostra o log do agente.
+   O composer normal envia direto ao subagente enquanto esta visão estiver aberta. */
+function agentViewEls() {
+  let box = document.getElementById('agentMessages');
+  if (!box) {
+    box = document.createElement('div'); box.id = 'agentMessages'; box.hidden = true;
+    $('#messages').after(box);
+    const bar = document.createElement('div'); bar.id = 'agentBanner'; bar.hidden = true;
+    $('#chatHeader').after(bar);
+  }
+  return { box, bar: document.getElementById('agentBanner') };
+}
+function openAgentChat(id) {
+  if (!getAgents().find(a => a.id === id)) return;
+  _agentChatId = id;
+  renderAgents();
+  renderAgentChat(true);
+  setTimeout(() => { try { $('#input').focus(); } catch {} }, 60);
+}
+function closeAgentChat() {
+  _agentChatId = null;
+  renderAgents();
+  const { box, bar } = agentViewEls();
+  box.hidden = true; bar.hidden = true; $('#messages').hidden = false;
+  $('#input').placeholder = $('#input').dataset.phOrig || $('#input').placeholder;
+  $('#messages').scrollTop = 1e6;
+}
+function renderAgentChat(scroll = true) {
+  const ag = getAgents().find(a => a.id === _agentChatId);
+  if (!ag) { if (_agentChatId) closeAgentChat(); return; }
+  const { box, bar } = agentViewEls();
+  const mn = getMain().name;
+  const inp = $('#input');
+  if (!inp.dataset.phOrig) inp.dataset.phOrig = inp.placeholder;
+  inp.placeholder = `Peça direto ao ${ag.name}…  (Enter envia)`;
+  $('#messages').hidden = true; box.hidden = false; bar.hidden = false;
+  bar.innerHTML = `<span class="aic">${ic(ag.icon || 'bot')}</span><div class="agent-txt"><b>${escapeHtml(ag.name)}</b><small>${ag.busy ? 'trabalhando…' : 'subagente · ' + escapeHtml((ag.personality || '').slice(0, 110))}</small></div><button class="btn ghost sm" id="agentBack" type="button">${ic('arrow-left')}Voltar ao ${escapeHtml(mn)}</button>`;
+  bar.querySelector('#agentBack').onclick = closeAgentChat;
+  const lg = getAgentLog(ag.id);
+  const time = e => new Date(e.ts).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  const lab = e => e.from === 'prime' ? `${mn} → ${ag.name}${e.review ? ' · revisão' : ''}` : e.from === 'user' ? `Você → ${ag.name}` : `${ag.name} → ${e.to === 'user' ? 'Você' : mn}`;
+  const prevTop = box.scrollTop;
+  box.innerHTML = '';
+  if (!lg.length) {
+    const d = document.createElement('div'); d.className = 'msg sys';
+    d.textContent = `Sem conversa ainda. Quando o ${mn} delegar algo, o pedido e a resposta aparecem aqui — e você pode pedir direto pelo campo abaixo.`;
+    box.appendChild(d);
+  }
+  lg.forEach(e => {
+    const d = document.createElement('div');
+    d.className = 'msg ' + (e.from === 'user' ? 'me' : 'ai') + (e.from === 'prime' ? ' from-prime' : '') + (e.error ? ' err' : '');
+    d.innerHTML = (e.from === 'user' ? escapeHtml(e.text) : mdLite(e.text)) + `<span class="src">${escapeHtml(lab(e))} · ${time(e)}</span>`;
+    box.appendChild(d);
+  });
+  if (ag.busy) { const d = document.createElement('div'); d.className = 'msg ai'; d.innerHTML = `<span class="src">${escapeHtml(ag.name)} está trabalhando…</span>`; box.appendChild(d); }
+  icons();
+  box.scrollTop = scroll ? box.scrollHeight : prevTop;
+}
+async function chatWithSubagent(ag, text) {
+  if (ag.busy) { toast('bot', `${escapeHtml(ag.name)} está ocupado, aguarde.`); return; }
+  const sent = agentChatMsgs(ag, 'user', text);
+  logAgent(ag.id, 'user', text);
+  setAgentBusy(ag.id, true);
+  if (_agentChatId === ag.id) renderAgentChat();
+  try {
+    let out = '';
+    const mn = getMain().name;
+    if (window.__runReAct) {
+      const subHistory = getAgentLog(ag.id).slice(-10).map(e => e.from === 'agent'
+        ? { role: 'assistant', content: e.text }
+        : { role: 'user', content: `[${e.from === 'prime' ? mn : 'Usuário'}] ${e.text}` });
+      const subExecTool = async (name, arg) => {
+        if (/^agent_(create|update|delete|delegate)$/.test(name)) {
+          return `BLOQUEADO: Apenas o ${mn} pode criar e gerenciar subagentes.`;
+        }
+        return await execTool(name, arg, () => {});
+      };
+      const v = await window.__runReAct(`[Usuário] ${text}`, {
+        history: subHistory,
+        cfg,
+        callLLM,
+        getSkills,
+        uiConfirm,
+        execToolReal: subExecTool,
+        onStatus: () => {},
+        agent: ag,
+        workspace: (await getWorkDir(false).catch(() => null))?.name
+      });
+      out = v.answer || '(sem resposta)';
+    } else {
+      const sent = agentChatMsgs(ag, 'user', text);
+      out = await Promise.race([callLLM(sent), new Promise((_, rej) => setTimeout(() => rej(new Error('agente excedeu 60s')), 60000))]);
+    }
+    trackLLM([{ role: 'user', content: text }], out);
+    logAgent(ag.id, 'agent', out, { to: 'user' });
+    log(`Pedido direto → ${ag.name}: ${text.slice(0, 60)}`, 'ok');
+  } catch (e) {
+    logAgent(ag.id, 'agent', `⚠ Falhou: ${e.message}`, { error: true, to: 'user' });
+  } finally { setAgentBusy(ag.id, false); if (_agentChatId === ag.id) renderAgentChat(); }
+}
+async function execAgentTool(name, arg, say) {
+  if (name === 'agent_list') {
+    say('Listando agentes…');
+    const all = getAgents();
+    if (!all.length) return 'AGENTES: nenhum subagente criado ainda.';
+    return `AGENTES (${all.length}):\n` + all.map((a, i) => `${i + 1}. ${a.name}${a.busy ? ' (ocupado)' : ''} — ${String(a.personality || '').slice(0, 200)}`).join('\n');
+  }
+  if (name === 'agent_history') {
+    let o = {};
+    const raw = String(arg || '').trim();
+    if (raw) { try { o = JSON.parse(raw); if (!o || typeof o !== 'object') o = { agent: String(o) }; } catch { o = { agent: raw }; } }
+    const mn = getMain().name;
+    const since = (() => {
+      const w = String(o.since || '').toLowerCase();
+      if (w === 'today' || w === 'hoje') { const d = new Date(); d.setHours(0, 0, 0, 0); return d.getTime(); }
+      const h = Number(o.since); return h > 0 ? Date.now() - h * 3600e3 : 0;
+    })();
+    const limit = Math.min(Math.max(Number(o.limit) || 30, 1), 60);
+    const fmt = e => `${new Date(e.ts).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} ${e.from === 'prime' ? `${mn}→agente${e.review ? ' (revisão)' : ''}` : e.from === 'user' ? 'USUÁRIO→agente' : `agente→${e.to === 'user' ? 'USUÁRIO' : mn}`}: ${String(e.text).replace(/\s+/g, ' ').slice(0, 700)}`;
+    const targets = o.agent ? [findAgentLoose(o.agent)].filter(Boolean) : getAgents();
+    if (o.agent && !targets.length) throw new Error(`agente "${o.agent}" não existe. Existentes: ${getAgents().map(a => a.name).join(', ') || 'nenhum'}`);
+    say(`Lendo histórico${o.agent ? ' de ' + targets[0].name : ' dos agentes'}…`);
+    if (!targets.length) return 'HISTÓRICO: nenhum subagente existe.';
+    const blocks = targets.map(a => {
+      const lg = getAgentLog(a.id).filter(e => e.ts >= since);
+      if (!lg.length) return `== ${a.name} ==\n(sem conversa${since ? ' no período' : ''})`;
+      const per = o.agent ? limit : Math.min(limit, 6);
+      return `== ${a.name} (${lg.length} msg${lg.length > per ? `, mostrando as ${per} últimas` : ''}) ==\n` + lg.slice(-per).map(fmt).join('\n');
+    });
+    return `HISTÓRICO DE AGENTES${since ? ' (filtrado)' : ''}:\n` + blocks.join('\n\n');
+  }
+  if (name === 'agent_create') {
+    const o = parseAgentArg(arg);
+    const items = Array.isArray(o.agents) ? o.agents : [o];
+    const lines = [];
+    for (const it of items.slice(0, 6)) {
+      const nm = String(it.name || '').trim().slice(0, 40);
+      const ins = String(it.instructions || it.personality || '').trim().slice(0, 2000);
+      if (!nm || !ins) { lines.push('ERRO: agent_create exige "name" e "instructions".'); continue; }
+      if (findAgentLoose(nm)) { lines.push(`ERRO: já existe o agente "${nm}" — use agent_update para mudar as instruções.`); continue; }
+      if (getAgents().length >= AGENT_MAX) { lines.push(`ERRO: limite de ${AGENT_MAX} agentes atingido — use agent_delete.`); continue; }
+      const icon = String(it.icon || 'bot').toLowerCase();
+      const a = { id: 'a' + Date.now() + Math.random().toString(36).slice(2, 5), name: nm, icon: /^[a-z-]+$/.test(icon) ? icon : 'bot', personality: ins, busy: false, createdBy: 'main' };
+      say(`Criando agente ${nm}…`);
+      saveAgents([...getAgents(), a]);
+      log('Agente criado pelo principal: ' + nm, 'ok');
+      lines.push(`AGENTE CRIADO: ${nm} — instruções: ${ins.slice(0, 160)}`);
+    }
+    try { toast('bot', `Principal criou ${lines.filter(l => l.startsWith('AGENTE CRIADO')).length} agente(s). Veja na aba Agentes.`); } catch {}
+    return lines.join('\n');
+  }
+  if (name === 'agent_update') {
+    const o = parseAgentArg(arg);
+    const ag = findAgentLoose(o.name);
+    if (!ag) throw new Error(`agente "${o.name}" não existe. Existentes: ${getAgents().map(a => a.name).join(', ') || 'nenhum'}`);
+    const ins = String(o.instructions || o.personality || '').trim().slice(0, 2000);
+    if (!ins) throw new Error('agent_update exige "instructions"');
+    say(`Atualizando ${ag.name}…`);
+    saveAgents(getAgents().map(a => a.id === ag.id ? { ...a, personality: ins, ...(o.icon && /^[a-z-]+$/.test(String(o.icon).toLowerCase()) ? { icon: String(o.icon).toLowerCase() } : {}) } : a));
+    return `AGENTE ATUALIZADO: ${ag.name} — novas instruções: ${ins.slice(0, 160)}`;
+  }
+  if (name === 'agent_delete') {
+    const o = parseAgentArg(arg);
+    const ag = findAgentLoose(o.name);
+    if (!ag) throw new Error(`agente "${o.name}" não existe`);
+    if (!(await uiConfirm('Excluir agente', `O principal quer remover "${ag.name}" da equipe. Confirmar?`, 'Excluir'))) return 'Usuário negou a exclusão do agente.';
+    saveAgents(getAgents().filter(a => a.id !== ag.id)); dropAgentLog(ag.id);
+    return `AGENTE EXCLUÍDO: ${ag.name}`;
+  }
+  if (name === 'agent_delegate') {
+    const o = parseAgentArg(arg);
+    const items = (Array.isArray(o.tasks) ? o.tasks : (Array.isArray(o) ? o : [o])).slice(0, 6);
+    say(`Delegando ${items.length} tarefa(s)…`);
+    const outs = await Promise.all(items.map(async it => {
+      const agName = it.agent || it.agente || it.name || it.nome || '';
+      const ag = findAgentLoose(agName);
+      if (!ag) return `[ERRO] agente "${agName}" não existe. Existentes: ${getAgents().map(a => a.name).join(', ') || 'nenhum'} — crie com agent_create.`;
+      const taskText = it.task || it.tarefa || it.text || it.prompt || it.pedido || '';
+      if (!String(taskText || '').trim()) return `[ERRO] tarefa vazia para ${ag.name}.`;
+      return await runSubagentTask(ag, String(taskText).slice(0, 3000), String(it.feedback || '').slice(0, 1500));
+    }));
+    const mn = getMain().name;
+    try { toast('bot', `Subagentes concluíram — <b>${escapeHtml(mn)}</b> está analisando as entregas.`); } catch {}
+    return outs.join('\n\n') + `\n\n[${mn.toUpperCase()}: os subagentes terminaram e entregaram acima. ANALISE cada entrega contra o pedido do usuário (correta? completa? sem dados inventados?). Se alguma for insatisfatória, chame agent_delegate com "feedback". Se estiver ok, responda ao usuário com: veredito por agente (nome + o que fez + ok/ressalva) e o resultado final consolidado.]`;
+  }
+  throw new Error('tool de agente desconhecida: ' + name);
 }
 async function teamFlow(task) {
   const main = getMain();

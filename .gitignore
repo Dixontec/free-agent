@@ -22,4 +22,9 @@ squashfs-root/
 
 # Servidor de voz local (venv + modelos grandes)
 voice-server/.venv/
+voice-server/.build-venv/
 voice-server/models/
+voice-server/.voice.log
+
+# Runtime de voz embutido no app (gerado por `npm run voice:bundle`)
+vendor/

@@ -644,6 +644,41 @@ window.AgentBrowser = (() => {
   }
 
   /* ── Inicialização de UI e Eventos ── */
+  function toggleMaximize(forceState) {
+    const container = $('#browserContainer');
+    if (!container) return;
+    state.isMaximized = typeof forceState === 'boolean' ? forceState : !state.isMaximized;
+    container.classList.toggle('maximized', state.isMaximized);
+    document.body.classList.toggle('browser-maximized', state.isMaximized);
+    const icon = $('#browserBtnExpand i');
+    if (icon) {
+      icon.setAttribute('data-lucide', state.isMaximized ? 'minimize-2' : 'maximize-2');
+      try { if (window.lucide) lucide.createIcons(); } catch {}
+    }
+    const expBtn = $('#browserBtnExpand');
+    if (expBtn) {
+      expBtn.title = state.isMaximized ? 'Restaurar visão mobile' : 'Ampliar (Janela horizontal grande)';
+    }
+    if (state.mode === 'electron' && state.frame) {
+      try {
+        if (typeof state.frame.setUserAgent === 'function') {
+          state.frame.setUserAgent(state.isMaximized ? '' : MOBILE_UA);
+        }
+      } catch {}
+    }
+  }
+
+  // Fechar navegador (retorna à aba anterior / rotinas)
+  function closeBrowser() {
+    if (state.isMaximized) {
+      toggleMaximize(false);
+    }
+    if (typeof window.switchTab === 'function') {
+      const backTab = window._lastActiveTab && window._lastActiveTab !== 'browser' ? window._lastActiveTab : 'routines';
+      window.switchTab(backTab);
+    }
+  }
+
   function init() {
     if (state.ready) return;
     state.ready = true;
@@ -688,42 +723,6 @@ window.AgentBrowser = (() => {
     // Ações rápidas de Computer Use na barra
     $('#browserBtnInspect')?.addEventListener('click', () => inspect());
     $('#browserBtnScreenshot')?.addEventListener('click', () => screenshot());
-
-    // Botão Maximizar / Restaurar (visão horizontal ampla vs visão mobile vertical)
-    function toggleMaximize(forceState) {
-      const container = $('#browserContainer');
-      if (!container) return;
-      state.isMaximized = typeof forceState === 'boolean' ? forceState : !state.isMaximized;
-      container.classList.toggle('maximized', state.isMaximized);
-      document.body.classList.toggle('browser-maximized', state.isMaximized);
-      const icon = $('#browserBtnExpand i');
-      if (icon) {
-        icon.setAttribute('data-lucide', state.isMaximized ? 'minimize-2' : 'maximize-2');
-        try { if (window.lucide) lucide.createIcons(); } catch {}
-      }
-      const expBtn = $('#browserBtnExpand');
-      if (expBtn) {
-        expBtn.title = state.isMaximized ? 'Restaurar visão mobile' : 'Ampliar (Janela horizontal grande)';
-      }
-      if (state.mode === 'electron' && state.frame) {
-        try {
-          if (typeof state.frame.setUserAgent === 'function') {
-            state.frame.setUserAgent(state.isMaximized ? '' : MOBILE_UA);
-          }
-        } catch {}
-      }
-    }
-
-    // Fechar navegador (retorna à aba anterior / rotinas)
-    function closeBrowser() {
-      if (state.isMaximized) {
-        toggleMaximize(false);
-      }
-      if (typeof window.switchTab === 'function') {
-        const backTab = window._lastActiveTab && window._lastActiveTab !== 'browser' ? window._lastActiveTab : 'routines';
-        window.switchTab(backTab);
-      }
-    }
 
     $('#browserBtnExpand')?.addEventListener('click', () => toggleMaximize());
     $('#browserBtnClose')?.addEventListener('click', closeBrowser);

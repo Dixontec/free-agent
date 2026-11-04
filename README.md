@@ -165,8 +165,14 @@ Free Agent also ships as a desktop app (Electron, single instance, stable origin
 
 ```bash
 npm start        # run as desktop app
-npm run dist     # build Free-Agent-<version>-x86_64.AppImage
+npm run voice:models   # one-time: download Kokoro models (needed only for building)
+npm run dist     # build Free-Agent-<version>-x86_64.AppImage (Kokoro embedded)
 ```
+
+> **Kokoro is embedded.** `npm run dist` bundles a portable Python runtime plus the
+> Kokoro models into the app (`resources/voice`), so users never download a model at
+> runtime. The bundle is produced by `scripts/build-voice.mjs` and only needs to be
+> rebuilt when the voice stack changes (`npm run voice:bundle -- --force`).
 
 Windows portable builds are published on the same Releases page, and the **bell in the app** offers one-click download of both.
 
@@ -422,8 +428,14 @@ O Free Agent também empacota como app desktop (Electron, instância única, ori
 
 ```bash
 npm start        # roda como app desktop
-npm run dist     # gera Free-Agent-<versão>-x86_64.AppImage
+npm run voice:models   # uma vez: baixa os modelos do Kokoro (só para build)
+npm run dist     # gera Free-Agent-<versão>-x86_64.AppImage (Kokoro embutido)
 ```
+
+> **Kokoro embutido.** O `npm run dist` empacota um Python portátil + os modelos do
+> Kokoro dentro do app (`resources/voice`) — o usuário final não baixa modelo nenhum.
+> O bundle é gerado por `scripts/build-voice.mjs` e só precisa ser refeito quando a
+> stack de voz mudar (`npm run voice:bundle -- --force`).
 
 A versão portable do Windows é publicada na mesma página de Releases, e o **sino dentro do app** oferece o download em 1 clique dos dois.
 

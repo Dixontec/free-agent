@@ -624,43 +624,55 @@ registerProcessor('rt-cap',RT);`;
         try { localStorage.setItem('nexus:kokoro_choice', 'kokoro'); } catch {}
 
         try {
-          $('#kmProgLabel').textContent = 'Iniciando download…';
-          $('#kmProgPct').textContent = '0%';
-          $('#kmProgBar').style.width = '0%';
-          $('#kmProgDetail').textContent = 'Conectando ao repositório de modelos…';
+          // Build empacotado: os modelos já vêm no app — não baixa nada.
+          let st0 = null;
+          try { st0 = await (await fetch('/api/kokoro/status')).json(); } catch {}
+          const included = !!(st0 && (st0.bundled || st0.modelsExist));
 
-          // Inicia o download no backend local (Node/Electron), sem restrições de CORS
-          const res = await fetch('/api/kokoro/download', { method: 'POST' });
-          if (!res.ok) throw new Error(`Falha na requisição local: HTTP ${res.status}`);
+          if (!included) {
+            $('#kmProgLabel').textContent = 'Iniciando download…';
+            $('#kmProgPct').textContent = '0%';
+            $('#kmProgBar').style.width = '0%';
+            $('#kmProgDetail').textContent = 'Conectando ao repositório de modelos…';
 
-          // Polling de progresso
-          let downloadDone = false;
-          while (!downloadDone) {
-            await sleep(300);
-            let st = null;
-            try {
-              const stRes = await fetch('/api/kokoro/status');
-              if (stRes.ok) st = await stRes.json();
-            } catch {}
+            // Inicia o download no backend local (Node/Electron), sem restrições de CORS
+            const res = await fetch('/api/kokoro/download', { method: 'POST' });
+            if (!res.ok) throw new Error(`Falha na requisição local: HTTP ${res.status}`);
 
-            if (!st) continue;
-            if (st.error) throw new Error(st.error);
+            // Polling de progresso
+            let downloadDone = false;
+            while (!downloadDone) {
+              await sleep(300);
+              let st = null;
+              try {
+                const stRes = await fetch('/api/kokoro/status');
+                if (stRes.ok) st = await stRes.json();
+              } catch {}
 
-            if (st.progress) {
-              const p = st.progress;
-              const fName = p.file || 'modelos';
-              $('#kmProgLabel').textContent = `Baixando ${fName}…`;
-              const pct = Math.max(0, Math.min(100, p.pct || 0));
-              $('#kmProgPct').textContent = `${pct}%`;
-              $('#kmProgBar').style.width = `${pct}%`;
-              const mbLoaded = ((p.loaded || 0) / (1024 * 1024)).toFixed(1);
-              const mbTotal = ((p.total || 370435312) / (1024 * 1024)).toFixed(0);
-              $('#kmProgDetail').textContent = `${mbLoaded} MB de ${mbTotal} MB`;
+              if (!st) continue;
+              if (st.error) throw new Error(st.error);
+
+              if (st.progress) {
+                const p = st.progress;
+                const fName = p.file || 'modelos';
+                $('#kmProgLabel').textContent = `Baixando ${fName}…`;
+                const pct = Math.max(0, Math.min(100, p.pct || 0));
+                $('#kmProgPct').textContent = `${pct}%`;
+                $('#kmProgBar').style.width = `${pct}%`;
+                const mbLoaded = ((p.loaded || 0) / (1024 * 1024)).toFixed(1);
+                const mbTotal = ((p.total || 370435312) / (1024 * 1024)).toFixed(0);
+                $('#kmProgDetail').textContent = `${mbLoaded} MB de ${mbTotal} MB`;
+              }
+
+              if (st.done || (!st.isDownloading && st.modelsExist)) {
+                downloadDone = true;
+              }
             }
-
-            if (st.done || (!st.isDownloading && st.modelsExist)) {
-              downloadDone = true;
-            }
+          } else {
+            $('#kmProgLabel').textContent = 'Ativando Kokoro…';
+            $('#kmProgPct').textContent = '100%';
+            $('#kmProgBar').style.width = '100%';
+            $('#kmProgDetail').textContent = 'Kokoro já vem incluído no Free Agent — nenhum download necessário.';
           }
 
           $('#kmProgLabel').textContent = 'Iniciando motor de voz Kokoro…';
@@ -712,12 +724,18 @@ registerProcessor('rt-cap',RT);`;
       modal.hidden = false;
       try { window.lucide && lucide.createIcons(); } catch {}
 
-      // Se modelos já existem em disco, adapta label do botão
+      // Se os modelos já vêm no app (ou já existem em disco), adapta o texto
       fetch('/api/kokoro/status').then(r => r.json()).then(st => {
-        if (st.modelsExist && $('#kmBtnKokoro')) {
-          $('#kmBtnKokoro').innerHTML = '<i data-lucide="zap"></i> Ativar Kokoro (Já baixado)';
-          try { window.lucide && lucide.createIcons(); } catch {}
+        if (!(st.modelsExist || st.bundled)) return;
+        const btn = $('#kmBtnKokoro');
+        if (btn) {
+          btn.innerHTML = st.bundled
+            ? '<i data-lucide="zap"></i> Ativar Kokoro (incluído no app)'
+            : '<i data-lucide="zap"></i> Ativar Kokoro (já baixado)';
         }
+        const desc = $('#kmCardKokoro p');
+        if (desc && st.bundled) desc.textContent = 'Síntese ultrarrealista com vozes humanas brasileiras. Já vem incluída no Free Agent — sem downloads.';
+        try { window.lucide && lucide.createIcons(); } catch {}
       }).catch(() => {});
     });
   }
@@ -834,7 +852,10 @@ registerProcessor('rt-cap',RT);`;
       <div id="rtHttpW" hidden>
         <label class="fld"><span>Voz Kokoro</span><select id="rtHV"></select></label>
         <label class="fld"><span>URL do servidor</span><input id="rtUrl" /></label>
-        <div class="btnrow"><button type="button" id="rtLoadV" class="btn ghost sm">Reconectar / recarregar vozes</button></div>
+        <div class="btnrow">
+          <button type="button" id="rtLoadV" class="btn ghost sm">Reconectar / recarregar vozes</button>
+          <button type="button" id="rtTest" class="btn ghost sm"><i data-lucide="play"></i> Testar voz</button>
+        </div>
       </div>
       <label class="fld"><span>Velocidade: <b id="rtRateV"></b>×</span><input id="rtRate" type="range" min="0.7" max="1.5" step="0.05" /></label>
       <div class="fld" style="margin-top:14px;padding:12px 14px;border-radius:12px;background:rgba(127,127,137,.06);border:1px solid var(--stroke)">

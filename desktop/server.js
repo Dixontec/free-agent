@@ -83,7 +83,7 @@ function downloadFileWithRedirect(url, dest, onProgress) {
 /** Cria (mas não inicia) o servidor que serve `root`. */
 function createStaticServer(root, options = {}) {
   const ROOT = path.resolve(root);
-  const modelsDir = path.join(ROOT, 'voice-server', 'models');
+  const modelsDir = path.resolve(options.modelsDir || path.join(ROOT, 'voice-server', 'models'));
   const onnxFile = path.join(modelsDir, 'kokoro-v1.0.onnx');
   const voicesFile = path.join(modelsDir, 'voices-v1.0.bin');
 
@@ -188,6 +188,8 @@ function createStaticServer(root, options = {}) {
           modelsExist: onnxExists && voicesExists,
           onnx: onnxExists,
           voices: voicesExists,
+          bundled: !!options.bundled,
+          modelsDir,
           isDownloading: downloadState.isDownloading,
           progress: {
             file: downloadState.file,
@@ -201,6 +203,16 @@ function createStaticServer(root, options = {}) {
       }
 
       if (p === '/api/kokoro/download' && req.method === 'POST') {
+        if (options.bundled) {
+          const ok = fs.existsSync(onnxFile) && fs.existsSync(voicesFile);
+          if (!ok) {
+            return send(res, 409, JSON.stringify({
+              ok: false,
+              error: 'Modelos embutidos ausentes neste build — reinstale o app.',
+            }), 'application/json');
+          }
+          return send(res, 200, JSON.stringify({ ok: true, modelsExist: true, bundled: true, done: true }), 'application/json');
+        }
         if (!downloadState.isDownloading) {
           startKokoroDownload();
         }

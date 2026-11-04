@@ -1,7 +1,7 @@
 {
   "name": "free-agent",
   "productName": "Free Agent",
-  "version": "1.2.1",
+  "version": "1.3.0",
   "description": "Free Agent — local-first AI harness",
   "author": "Dixontec",
   "license": "MIT",
@@ -12,8 +12,11 @@
   "scripts": {
     "start": "electron .",
     "voice": "voice-server/.venv/bin/python voice-server/voice_server.py",
+    "voice:models": "node scripts/fetch-voice-models.mjs",
+    "voice:bundle": "node scripts/build-voice.mjs",
+    "stt:bundle": "node scripts/build-stt.mjs",
     "server": "node -e \"const{createStaticServer}=require('./desktop/server');createStaticServer('.').listen(47811,'127.0.0.1',()=>console.log('Free Agent em http://127.0.0.1:47811'))\"",
-    "dist": "electron-builder --linux AppImage"
+    "dist": "npm run voice:bundle && npm run stt:bundle && electron-builder --linux AppImage"
   },
   "build": {
     "appId": "com.dixontec.freeagent",
@@ -32,6 +35,20 @@
       "assets/**/*",
       "eval/**/*",
       "!eval/*.md"
+    ],
+    "extraResources": [
+      {
+        "from": "vendor/voice",
+        "to": "voice"
+      },
+      {
+        "from": "voice-server/models",
+        "to": "voice/models"
+      },
+      {
+        "from": "vendor/stt",
+        "to": "stt"
+      }
     ],
     "linux": {
       "target": [
@@ -67,6 +84,7 @@
     }
   },
   "devDependencies": {
+    "@xenova/transformers": "^2.17.2",
     "electron": "^44.9.0",
     "electron-builder": "^26.15.3"
   }

@@ -48,7 +48,7 @@ export function assertTaskComplete(userText, answer, ctx) {
     open: /abr[ai]|acessa|mostra.*site/.test(t),
     news: /not[ií]cia/.test(t),
     routine: /rotina/.test(t),
-    createTask: /tarefa/i.test(t) && /(cri|adicion|nova)/i.test(t),
+    createTask: /tarefa/i.test(t) && /(cri|adicion|nova)/i.test(t) && !/agentes?/i.test(t),
     completeTask: /tarefa/i.test(t) && /(conclu|finaliz|termin|marcar.*(feito|conclu)|cumpriu|fez a tarefa|deu.*pronto)/i.test(t) && !/(cri|adicion|nova)/i.test(t),
     deleteTask: /tarefa/i.test(t) && /(delet|apag|remov|exclu)/i.test(t) && !/(cri|adicion|nova)/i.test(t),
     createNote: /\bnota/i.test(t) && /(cri|anote|anotar|adicion|salve|salvar|nova)/i.test(t) && !/(edit|atualiz|delet|apag|remov|exclu)/i.test(t),
@@ -56,9 +56,16 @@ export function assertTaskComplete(userText, answer, ctx) {
     editNote: /nota/i.test(t) && /(edit|atualiz|mudar|alter)/i.test(t),
     deleteNote: /nota/i.test(t) && /(delet|apag|remov|exclu)/i.test(t),
     listTasks: /tem.+tarefa|tenho.+tarefa|alguma tarefa|tarefa pendente|o que.*pendente|lista.*tarefa|mostra.*tarefa/i.test(t),
+    agentHistory: /o que (o|a|os|as)?\s*(agente\s+|subagente\s+)?[\wÀ-ú-]+\s+(fez|disse|respondeu|entregou|trabalhou)|(hist[óo]rico|conversa|contexto)\s+d[oae]s?\s+(sub-?)?agentes?|(o que|como)\s+(est[aá]|anda)\s+(o|a)\s+(agente|subagente)/i.test(t),
+    createAgent: /(cri|monte|montar|fa[çc]a|adicion|nov[oa]s?)/i.test(t) && /sub-?agentes?|\bagentes?\b/i.test(t) && !/(delet|apag|remov|exclu)/i.test(t),
+    delegate: /(?:deleg|pe[çc]a|pede|mande|manda|pergunt[ae]|perguntar)\s+(?:a|ao|para|pro|pra|aos?|às?)\s+[\wÀ-ú-]+|deleg/i.test(t),
     browserInspect: /inspecion|elementos.*(p[áa]gina|tela|navegador|browser)/i.test(t),
     browserScreenshot: /screenshot|print|captur.*(tela|p[áa]gina|navegador|browser)/i.test(t),
   };
+  if (ctx && ctx.isSubagent) {
+    wants.createAgent = false;
+    wants.delegate = false;
+  }
   const used = new Set((ctx.toolsUsed || []).map(x => String(x).toLowerCase()));
   // REGRA ESTRITA: alegar que executou sem a tool ter rodado = pendência.
   // (confirmação textual só vale se a tool correspondente executou — sem exceção)
@@ -84,6 +91,23 @@ export function assertTaskComplete(userText, answer, ctx) {
     pend.push({ check: 'tarefa-ler', reason: 'perguntou de tarefas mas não leu a lista real', fix: 'use list_tasks e responda SÓ com os dados retornados' });
   if (wants.open && !used.has('open_site') && !used.has('browser_open'))
     pend.push({ check: 'tarefa-abrir', reason: 'pediu abrir mas nem open_site nem browser_open executou', fix: 'execute browser_open ou open_site e só então confirme' });
+  if (wants.agentHistory && !used.has('agent_history'))
+    pend.push({ check: 'agente-historico', reason: 'perguntou sobre o que um agente fez mas o histórico dele não foi lido', fix: 'use agent_history com o nome do agente e responda só com o que ele mostra' });
+  if (wants.createAgent && !used.has('agent_create') && !used.has('agent_update'))
+    pend.push({ check: 'agente-criar', reason: 'pediu criar agente mas agent_create não executou', fix: 'use agent_create com name e instructions antes de responder' });
+  if (used.has('agent_delegate')) {
+    // Prime só entrega depois de analisar: a resposta precisa citar cada subagente que trabalhou.
+    const normS = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    const normAns = normS(a);
+    const names = [...new Set([...(ctx.toolOutputs || []).join('\n').matchAll(/\[(?:RESULTADO|FALHA) DO AGENTE ([^\]]+)\]/g)].map(m => m[1].trim()))];
+    const miss = names.filter(n => !normAns.includes(normS(n)));
+    if (names.length && miss.length)
+      pend.push({ check: 'prime-analise', reason: `resposta não analisa a entrega de: ${miss.join(', ')}`, fix: 'cite cada subagente pelo nome com o que fez e seu veredito (ok/ressalva)' });
+  }
+  const askingToCreate = /(?:quer|deseja|posso)\s+que\s+(?:eu\s+)?crie\s+(?:um\s+)?(?:sub-?)?agente/i.test(a) ||
+    /(?:n[ãa]o|nao)\s+(?:encontrei|achei|existe)\s+(?:o|a|nenhum)?\s*(?:sub-?)?agente/i.test(a);
+  if (wants.delegate && !used.has('agent_delegate') && !askingToCreate)
+    pend.push({ check: 'agente-delegar', reason: 'pediu delegar a subagente mas agent_delegate não executou', fix: 'se o subagente existir, use agent_delegate; se não existir, pergunte ao usuário se quer criá-lo' });
   if (wants.browserInspect && !used.has('browser_inspect'))
     pend.push({ check: 'browser-inspecionar', reason: 'pediu inspecionar mas browser_inspect não executou', fix: 'use browser_inspect para escanear a página antes de responder' });
   if (wants.browserScreenshot && !used.has('browser_screenshot'))
@@ -109,7 +133,7 @@ export function assertSkillSlug(slug, activeSlugs) {
 // Novo: resposta final nunca pode ser uma chamada de tool crua (vazamento de sintaxe).
 export function assertNoRawTool(answer) {
   const a = String(answer || '');
-  if (/<tool\s+name=|["']name"\s*:\s*"[\w-]+".*arguments/i.test(a))
+  if (/<tool\s+name=|<\/?agent_(create|list|update|delete|delegate|history)\b|["']name"\s*:\s*"[\w-]+".*arguments/i.test(a))
     return { ok: false, pending: [{ check: 'sem-tool-crua', reason: 'resposta é chamada de tool, não resposta final', fix: 'responda em pt-BR com os dados já obtidos, sem <tool>' }] };
   return { ok: true, pending: [] };
 }
